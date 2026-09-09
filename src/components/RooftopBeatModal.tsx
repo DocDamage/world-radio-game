@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Disc, Music, X, Volume2, Sparkles, Sliders } from 'lucide-react';
+import { Disc, Music, X, Volume2, Sparkles, Sliders, Trophy, Flame, Zap } from 'lucide-react';
 import { soundEffects } from '../services/audioEffects';
 import { gamepadManager } from '../services/gamepadManager';
+import confetti from 'canvas-confetti';
 
 interface RooftopBeatModalProps {
   isOpen: boolean;
@@ -10,6 +11,8 @@ interface RooftopBeatModalProps {
   countryName: string;
   stationName: string;
   onEarnCoins: (amount: number) => void;
+  highScore?: number;
+  onUpdateHighScore?: (score: number) => void;
 }
 
 interface BeatPad {
@@ -38,7 +41,9 @@ export const RooftopBeatModal: React.FC<RooftopBeatModalProps> = ({
   cityName,
   countryName,
   stationName,
-  onEarnCoins
+  onEarnCoins,
+  highScore = 0,
+  onUpdateHighScore
 }) => {
   const [activePads, setActivePads] = useState<Record<string, boolean>>({});
   const [scratchAngle, setScratchAngle] = useState<number>(0);
@@ -47,34 +52,99 @@ export const RooftopBeatModal: React.FC<RooftopBeatModalProps> = ({
   const [beatCount, setBeatCount] = useState<number>(0);
   const [coinsEarned, setCoinsEarned] = useState<number>(0);
 
+  // Rhythm & Scoring State
+  const [sessionScore, setSessionScore] = useState<number>(0);
+  const [combo, setCombo] = useState<number>(0);
+  const [crowdHype, setCrowdHype] = useState<number>(15); // 0 - 100
+  const [isFeverMode, setIsFeverMode] = useState<boolean>(false);
+
   const lastScratchYRef = useRef<number>(0);
   const coinsRef = useRef<number>(0);
+  const lastBeatTimeRef = useRef<number>(0);
+  const feverTimerRef = useRef<number | null>(null);
+  const scoreRef = useRef<number>(0);
+
+  // Combo multiplier based on streak
+  const comboMultiplier = isFeverMode
+    ? (combo >= 20 ? 16 : combo >= 12 ? 8 : combo >= 6 ? 4 : 2)
+    : (combo >= 20 ? 8 : combo >= 12 ? 4 : combo >= 6 ? 2 : 1);
+
+  // Activate Rooftop Fever Mode
+  const triggerFeverMode = useCallback(() => {
+    setIsFeverMode(true);
+    soundEffects.playCrowdCheer(3.0, 0.22);
+    confetti({
+      particleCount: 100,
+      spread: 80,
+      origin: { y: 0.6 }
+    });
+
+    if (feverTimerRef.current) clearTimeout(feverTimerRef.current);
+    feverTimerRef.current = window.setTimeout(() => {
+      setIsFeverMode(false);
+      setCrowdHype(40);
+    }, 10000);
+  }, []);
 
   // Trigger sample pad
   const triggerPad = useCallback((pad: BeatPad) => {
+    const now = performance.now();
     setActivePads(prev => ({ ...prev, [pad.id]: true }));
     setTimeout(() => {
       setActivePads(prev => ({ ...prev, [pad.id]: false }));
     }, 150);
 
-    // Play synthesis/audio burst
+    // Audio burst
     soundEffects.playRadarPing(pad.frequency, 0.12);
     if (pad.type === 'scratch' || pad.type === 'snare') {
       soundEffects.playStaticBurst(0.06, 0.15);
     }
     gamepadManager.vibrate(40, 0.3, 0.2);
 
+    // Combo logic: reset if idle > 2.2 seconds
+    const timeDelta = (now - lastBeatTimeRef.current) / 1000;
+    lastBeatTimeRef.current = now;
+
+    let nextCombo = 1;
+    if (timeDelta <= 2.2) {
+      nextCombo = combo + 1;
+    }
+    setCombo(nextCombo);
+
+    // Calculate points: base 50 × combo multiplier
+    const curMultiplier = isFeverMode
+      ? (nextCombo >= 20 ? 16 : nextCombo >= 12 ? 8 : nextCombo >= 6 ? 4 : 2)
+      : (nextCombo >= 20 ? 8 : nextCombo >= 12 ? 4 : nextCombo >= 6 ? 2 : 1);
+
+    const pts = 50 * curMultiplier;
+    scoreRef.current += pts;
+    setSessionScore(scoreRef.current);
+
+    if (scoreRef.current > highScore && onUpdateHighScore) {
+      onUpdateHighScore(scoreRef.current);
+    }
+
+    // Boost crowd hype
+    setCrowdHype(h => {
+      const next = Math.min(100, h + 3.5);
+      if (next >= 100 && !isFeverMode) {
+        triggerFeverMode();
+      }
+      return next;
+    });
+
     setBeatCount(b => {
       const next = b + 1;
-      if (next % 12 === 0) {
-        // Award jam bonus coins
-        coinsRef.current += 10;
+      if (next % 10 === 0) {
+        // Award jam bonus coins (doubled during fever)
+        const bonus = isFeverMode ? 20 : 10;
+        coinsRef.current += bonus;
         setCoinsEarned(coinsRef.current);
         soundEffects.playCoinSound();
       }
       return next;
     });
-  }, []);
+  }, [combo, isFeverMode, highScore, onUpdateHighScore, triggerFeverMode]);
 
   // Keyboard shortcut listener
   useEffect(() => {
@@ -93,6 +163,26 @@ export const RooftopBeatModal: React.FC<RooftopBeatModalProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, triggerPad]);
 
+  // Natural crowd hype decay & combo reset loop
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const interval = setInterval(() => {
+      // Decay crowd hype if not in fever mode
+      if (!isFeverMode) {
+        setCrowdHype(h => Math.max(10, h - 1.5));
+      }
+
+      // Check combo timeout
+      const now = performance.now();
+      if (lastBeatTimeRef.current > 0 && (now - lastBeatTimeRef.current) > 2400) {
+        setCombo(0);
+      }
+    }, 500);
+
+    return () => clearInterval(interval);
+  }, [isOpen, isFeverMode]);
+
   // Scratch turntable drag handlers
   const handleTurntableMouseDown = (e: React.MouseEvent) => {
     setIsScratching(true);
@@ -109,6 +199,17 @@ export const RooftopBeatModal: React.FC<RooftopBeatModalProps> = ({
     if (Math.abs(dy) > 3) {
       soundEffects.playStaticBurst(0.04, 0.15);
       gamepadManager.vibrate(30, 0.2, 0.1);
+
+      // Scratching adds points and hype
+      scoreRef.current += 15;
+      setSessionScore(scoreRef.current);
+      setCrowdHype(h => {
+        const next = Math.min(100, h + 1.2);
+        if (next >= 100 && !isFeverMode) {
+          triggerFeverMode();
+        }
+        return next;
+      });
     }
   };
 
@@ -120,6 +221,10 @@ export const RooftopBeatModal: React.FC<RooftopBeatModalProps> = ({
     if (coinsRef.current > 0) {
       onEarnCoins(coinsRef.current);
     }
+    if (scoreRef.current > highScore && onUpdateHighScore) {
+      onUpdateHighScore(scoreRef.current);
+    }
+    if (feverTimerRef.current) clearTimeout(feverTimerRef.current);
     onClose();
   };
 
@@ -127,11 +232,15 @@ export const RooftopBeatModal: React.FC<RooftopBeatModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-lg flex items-center justify-center p-3 select-none">
-      <div className="relative w-full max-w-4xl bg-slate-950 border border-purple-400/40 rounded-3xl overflow-hidden shadow-2xl flex flex-col text-slate-100">
+      <div className={`relative w-full max-w-4xl bg-slate-950 border rounded-3xl overflow-hidden shadow-2xl flex flex-col text-slate-100 transition-colors duration-300 ${
+        isFeverMode ? 'border-pink-500 shadow-pink-500/20 ring-2 ring-pink-500' : 'border-purple-400/40'
+      }`}>
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 bg-slate-900/90 border-b border-slate-800">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded-xl">
+            <div className={`p-2 rounded-xl border transition-colors ${
+              isFeverMode ? 'bg-pink-500/20 text-pink-400 border-pink-500/40 animate-pulse' : 'bg-purple-500/20 text-purple-400 border-purple-500/30'
+            }`}>
               <Disc className="w-5 h-5 animate-spin" />
             </div>
             <div>
@@ -139,22 +248,68 @@ export const RooftopBeatModal: React.FC<RooftopBeatModalProps> = ({
                 <h2 className="text-base font-black tracking-wide text-slate-100 uppercase">
                   {cityName} Rooftop Vinyl Radio Jam
                 </h2>
-                <span className="text-[10px] font-mono bg-purple-950 text-purple-300 border border-purple-500/40 px-2 py-0.5 rounded-full font-bold">
-                  LIVE OVER RADIO
-                </span>
+                {isFeverMode ? (
+                  <span className="text-[10px] font-mono bg-pink-950 text-pink-300 border border-pink-500/50 px-2 py-0.5 rounded-full font-bold animate-pulse">
+                    ⚡ ROOFTOP FEVER (2X COINS) ⚡
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-mono bg-purple-950 text-purple-300 border border-purple-500/40 px-2 py-0.5 rounded-full font-bold">
+                    LIVE OVER RADIO
+                  </span>
+                )}
               </div>
               <p className="text-xs text-slate-400">
-                Jamming along with <span className="text-purple-300 font-bold">{stationName}</span> • Scratch vinyl & trigger live beat pads!
+                Jamming live with <span className="text-purple-300 font-bold">{stationName}</span> • Build Groove Combos & Hype the Crowd!
               </p>
             </div>
           </div>
 
-          <button
-            onClick={handleExit}
-            className="p-1.5 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5 font-mono text-xs font-bold text-amber-300 bg-amber-950/80 px-2.5 py-1 rounded-xl border border-amber-500/30">
+              <Trophy className="w-3.5 h-3.5 text-amber-400" />
+              <span>Record: {Math.max(highScore, sessionScore)} pts</span>
+            </div>
+            <button
+              onClick={handleExit}
+              className="p-1.5 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Telemetry Bar (Score, Groove Combo, Crowd Hype) */}
+        <div className="px-6 py-2.5 bg-slate-900/60 border-b border-slate-800/80 flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
+          <div className="flex items-center gap-4">
+            <div>
+              <span className="text-slate-400">Session Score: </span>
+              <span className="font-bold text-purple-300 text-sm">{sessionScore.toLocaleString()} pts</span>
+            </div>
+
+            {combo > 1 && (
+              <div className="flex items-center gap-1.5 bg-purple-950/90 border border-purple-500/40 px-2.5 py-0.5 rounded-full text-purple-300 font-black animate-pulse">
+                <Flame className="w-3.5 h-3.5 text-orange-400" /> {combo} Combo ({comboMultiplier}x)
+              </div>
+            )}
+          </div>
+
+          {/* Crowd Hype Gauge */}
+          <div className="flex items-center gap-2">
+            <span className="text-slate-400 flex items-center gap-1">
+              <Zap className="w-3 h-3 text-pink-400" /> Crowd Hype:
+            </span>
+            <div className="w-32 h-2.5 bg-slate-800 rounded-full overflow-hidden relative">
+              <div
+                className={`h-full rounded-full transition-all duration-150 ${
+                  isFeverMode ? 'bg-gradient-to-r from-pink-500 to-amber-400 animate-pulse' : 'bg-gradient-to-r from-purple-500 to-pink-500'
+                }`}
+                style={{ width: `${crowdHype}%` }}
+              />
+            </div>
+            <span className={`font-bold ${isFeverMode ? 'text-pink-400' : 'text-slate-300'}`}>
+              {Math.round(crowdHype)}%
+            </span>
+          </div>
         </div>
 
         {/* Main DJ Deck Content */}
@@ -162,7 +317,7 @@ export const RooftopBeatModal: React.FC<RooftopBeatModalProps> = ({
           {/* Left Column: Interactive Vinyl Turntable */}
           <div className="flex flex-col items-center gap-3 bg-slate-900/60 border border-slate-800 p-6 rounded-3xl">
             <div className="text-xs font-mono text-slate-400 flex items-center gap-1.5">
-              <Music className="w-3.5 h-3.5 text-purple-400" /> Technics SL-1200 Analog Vinyl Platter
+              <Music className="w-3.5 h-3.5 text-purple-400" /> Technics SL-1200 Direct Drive Platter
             </div>
 
             {/* Turntable Platter */}
@@ -180,7 +335,9 @@ export const RooftopBeatModal: React.FC<RooftopBeatModalProps> = ({
               >
                 <div className="w-44 h-44 rounded-full border-[12px] border-slate-800/80 flex items-center justify-center">
                   {/* Vinyl Record Center Label */}
-                  <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-purple-600 to-pink-500 flex flex-col items-center justify-center shadow-inner text-center p-1">
+                  <div className={`w-24 h-24 rounded-full bg-gradient-to-tr ${
+                    isFeverMode ? 'from-pink-600 to-amber-400' : 'from-purple-600 to-pink-500'
+                  } flex flex-col items-center justify-center shadow-inner text-center p-1`}>
                     <div className="text-[9px] font-black text-slate-950 uppercase tracking-tight truncate w-full">
                       {cityName}
                     </div>
@@ -195,7 +352,7 @@ export const RooftopBeatModal: React.FC<RooftopBeatModalProps> = ({
             </div>
 
             <p className="text-[11px] text-slate-400 text-center max-w-xs">
-              Drag up and down on the vinyl to scratch along with the live radio broadcast!
+              Drag up and down on the vinyl to scratch along with the live radio broadcast and pump crowd hype!
             </p>
 
             {/* Filter Cutoff Slider */}
@@ -251,7 +408,7 @@ export const RooftopBeatModal: React.FC<RooftopBeatModalProps> = ({
             </div>
 
             <div className="bg-slate-900/40 border border-slate-800 p-3 rounded-2xl text-[11px] text-slate-400 leading-relaxed">
-              💡 <strong>Tip:</strong> Tap keys <strong>Q W E R / A S D F</strong> in rhythm with the broadcast beat! Every 12 beats earns you bonus Traveler Coins.
+              💡 <strong>Tip:</strong> Tap keys <strong>Q W E R / A S D F</strong> in rhythm with the broadcast beat! Maintain combos to multiply points up to <strong>8x/16x</strong> and trigger <strong>Rooftop Fever</strong>!
             </div>
           </div>
         </div>
@@ -261,7 +418,7 @@ export const RooftopBeatModal: React.FC<RooftopBeatModalProps> = ({
           <span className="font-mono text-purple-300">Rooftop Studio Session active in {cityName}, {countryName}</span>
           <button
             onClick={handleExit}
-            className="px-4 py-1.5 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl transition flex items-center gap-1.5 shadow"
+            className="px-4 py-1.5 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold text-xs rounded-xl transition flex items-center gap-1.5 shadow"
           >
             Save Session & Bank Coins
           </button>

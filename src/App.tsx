@@ -196,6 +196,15 @@ export function App() {
     });
   }, []);
 
+  const handleSellItem = useCallback((id: string, priceCoins: number) => {
+    setBackpack(b => {
+      const next = b.filter(i => i.id !== id);
+      localStorage.setItem('world_radio_backpack', JSON.stringify(next));
+      return next;
+    });
+    handleEarnCoins(priceCoins);
+  }, [handleEarnCoins]);
+
 
   // Initial load of worldwide stations
   useEffect(() => {
@@ -285,6 +294,22 @@ export function App() {
       setIsCityDrawerOpen(true);
     }
   };
+
+  const handleFastTravelPassport = useCallback((entry: PassportEntry) => {
+    const station: RadioStation = stations.find(s => s.id === entry.stationUuid) || {
+      id: entry.stationUuid,
+      name: entry.stationName,
+      place: entry.city,
+      country: entry.country,
+      countryCode: entry.countryCode,
+      geo_lat: entry.coordinates.lat,
+      geo_long: entry.coordinates.lng,
+      streamUrl: '',
+      tags: entry.genre
+    };
+    handleSelectStation(station);
+    setMode('street');
+  }, [stations]);
 
   // Next / Prev station
   const handleNextStation = () => {
@@ -810,6 +835,7 @@ export function App() {
         isOpen={isPassportOpen}
         onClose={() => setIsPassportOpen(false)}
         entries={passportEntries}
+        onFastTravel={handleFastTravelPassport}
       />
 
       {/* Command Palette (Ctrl+K) */}
@@ -880,6 +906,8 @@ export function App() {
         biome={locationEnvironment.biome}
         onAddBackpackItem={handleAddBackpackItem}
         onEarnCoins={handleEarnCoins}
+        highScore={highScores.fishing}
+        onUpdateHighScore={(s) => handleUpdateHighScore('fishing', s)}
       />
 
       {/* Rooftop Vinyl DJ Radio Jam (Inland Metropolises) */}
@@ -890,6 +918,8 @@ export function App() {
         countryName={activeStation?.country || selectedPlace?.country || 'World'}
         stationName={activeStation?.name || 'Local Radio'}
         onEarnCoins={handleEarnCoins}
+        highScore={highScores.dj}
+        onUpdateHighScore={(s) => handleUpdateHighScore('dj', s)}
       />
 
       {/* Desert Dune Buggy Cruiser (Desert Cities) */}
@@ -935,6 +965,8 @@ export function App() {
         onDeductCoins={handleDeductCoins}
         onAddBackpackItem={handleAddBackpackItem}
         backpackItemIds={backpack.map(b => b.id)}
+        backpack={backpack}
+        onSellItem={handleSellItem}
       />
 
       {/* Adventure Backpack & Inventory Modal */}
@@ -943,6 +975,7 @@ export function App() {
         onClose={() => setIsBackpackOpen(false)}
         items={backpack}
         onRemoveItem={handleRemoveBackpackItem}
+        onSellItem={handleSellItem}
       />
 
       {/* Postcard Photo Snap Modal */}

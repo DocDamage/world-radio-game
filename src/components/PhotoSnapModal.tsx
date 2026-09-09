@@ -87,12 +87,13 @@ export const PhotoSnapModal: React.FC<PhotoSnapModalProps> = ({
     onSaveToBackpack({
       id: `photo-${Date.now()}`,
       name: `${cityName} Street Viewfinder Postcard`,
-      category: 'souvenir',
+      category: 'photo',
       icon: '📸',
       city: cityName,
       country: countryName,
       description: `Pro SLR ${focalLength}mm f/${aperture} capture tuned to ${stationName}. Composition Score: ${baseScore}/100. Filter: ${filter}.`,
-      acquiredAt: new Date().toISOString()
+      acquiredAt: new Date().toISOString(),
+      priceCoins: baseScore
     });
   };
 

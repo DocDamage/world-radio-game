@@ -193,6 +193,101 @@ class RadioAudioEngine {
       // Ignore
     }
   }
+
+  // Crowd cheer / rooftop applause synthesis
+  public playCrowdCheer(duration = 2.0, maxGain = 0.18) {
+    try {
+      this.init();
+      if (!this.audioCtx) return;
+      if (this.audioCtx.state === 'suspended') this.audioCtx.resume();
+
+      const bufferSize = this.audioCtx.sampleRate * duration;
+      const buffer = this.audioCtx.createBuffer(1, bufferSize, this.audioCtx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        // Modulated noise for human applause texture
+        const t = i / this.audioCtx.sampleRate;
+        const envelope = Math.sin((t / duration) * Math.PI);
+        const flutter = 0.7 + 0.3 * Math.sin(t * 30) * Math.sin(t * 12);
+        data[i] = (Math.random() * 2 - 1) * envelope * flutter;
+      }
+
+      const noise = this.audioCtx.createBufferSource();
+      noise.buffer = buffer;
+
+      const filter = this.audioCtx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(1400, this.audioCtx.currentTime);
+      filter.Q.setValueAtTime(1.2, this.audioCtx.currentTime);
+
+      const gain = this.audioCtx.createGain();
+      gain.gain.setValueAtTime(maxGain, this.audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, this.audioCtx.currentTime + duration);
+
+      noise.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.audioCtx.destination);
+
+      noise.start();
+    } catch {
+      // Ignore
+    }
+  }
+
+  // Cooking hot pan sizzle
+  public playSkilletSizzle(duration = 0.8, maxGain = 0.14) {
+    try {
+      this.init();
+      if (!this.audioCtx) return;
+      if (this.audioCtx.state === 'suspended') this.audioCtx.resume();
+
+      const bufferSize = this.audioCtx.sampleRate * duration;
+      const buffer = this.audioCtx.createBuffer(1, bufferSize, this.audioCtx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * (0.8 + Math.random() * 0.4);
+      }
+
+      const noise = this.audioCtx.createBufferSource();
+      noise.buffer = buffer;
+
+      const filter = this.audioCtx.createBiquadFilter();
+      filter.type = 'highpass';
+      filter.frequency.setValueAtTime(2200, this.audioCtx.currentTime);
+
+      const gain = this.audioCtx.createGain();
+      gain.gain.setValueAtTime(maxGain, this.audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, this.audioCtx.currentTime + duration);
+
+      noise.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.audioCtx.destination);
+
+      noise.start();
+    } catch {
+      // Ignore
+    }
+  }
+
+  // Mechanical fishing reel ratchet click
+  public playReelClick() {
+    try {
+      this.init();
+      if (!this.audioCtx) return;
+      const osc = this.audioCtx.createOscillator();
+      const gain = this.audioCtx.createGain();
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(2800, this.audioCtx.currentTime);
+      gain.gain.setValueAtTime(0.06, this.audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, this.audioCtx.currentTime + 0.02);
+      osc.connect(gain);
+      gain.connect(this.audioCtx.destination);
+      osc.start();
+      osc.stop(this.audioCtx.currentTime + 0.02);
+    } catch {
+      // Ignore
+    }
+  }
 }
 
 export const soundEffects = new RadioAudioEngine();

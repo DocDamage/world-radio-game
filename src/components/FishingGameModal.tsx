@@ -15,6 +15,8 @@ interface FishingGameModalProps {
   biome: EnvironmentType;
   onAddBackpackItem: (item: BackpackItem) => void;
   onEarnCoins: (amount: number) => void;
+  highScore?: number;
+  onUpdateHighScore?: (score: number) => void;
 }
 
 type FishingPhase = 'aim' | 'cast' | 'waiting' | 'bite' | 'fight' | 'caught' | 'lost';
@@ -36,7 +38,9 @@ export const FishingGameModal: React.FC<FishingGameModalProps> = ({
   waterwayName,
   biome,
   onAddBackpackItem,
-  onEarnCoins
+  onEarnCoins,
+  highScore = 0,
+  onUpdateHighScore
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -45,7 +49,10 @@ export const FishingGameModal: React.FC<FishingGameModalProps> = ({
   const [castPower, setCastPower] = useState<number>(50); // 0 - 100
   const [tension, setTension] = useState<number>(50); // 0 - 100
   const [catchProgress, setCatchProgress] = useState<number>(20); // 0 - 100
-  const [activeFish, setActiveFish] = useState<{ species: FishSpecies; weight: number; coins: number } | null>(null);
+  const [activeFish, setActiveFish] = useState<{ species: FishSpecies; weight: number; coins: number; isRecord: boolean } | null>(null);
+  const [streak, setStreak] = useState<number>(0);
+  const [screenShake, setScreenShake] = useState<boolean>(false);
+  const reelClickTimerRef = useRef<number>(0);
 
   // Mutable refs for 60fps simulation
   const phaseRef = useRef<FishingPhase>('aim');
@@ -219,16 +226,26 @@ export const FishingGameModal: React.FC<FishingGameModalProps> = ({
       if (phaseRef.current === 'fight') {
         // Natural fish thrashing pulls tension and progress
         const fishStruggle = (Math.sin(currentTime * 0.008) * 14 + (Math.random() - 0.45) * 18) * dt;
+        const inSweetSpot = tensionRef.current >= 35 && tensionRef.current <= 65;
 
         if (reelInputRef.current) {
-          // Player reeling in
+          // Player reeling in — sweet spot grants +80% torque
+          const reelTorque = inSweetSpot ? 36 : 20;
           tensionRef.current = Math.min(100, tensionRef.current + 38 * dt);
-          progressRef.current = Math.min(100, progressRef.current + 22 * dt);
+          progressRef.current = Math.min(100, progressRef.current + reelTorque * dt);
+
+          if (currentTime - reelClickTimerRef.current > 100) {
+            soundEffects.playReelClick();
+            reelClickTimerRef.current = currentTime;
+          }
         } else {
           // Player feathering / letting out line
           tensionRef.current = Math.max(0, tensionRef.current - 26 * dt + fishStruggle);
           progressRef.current = Math.max(0, progressRef.current - 8 * dt);
         }
+
+        // Screen shake if tension is critically high (> 85%)
+        setScreenShake(tensionRef.current > 85);
 
         // Pull fish towards angler
         if (hookedFishRef.current) {
@@ -241,16 +258,21 @@ export const FishingGameModal: React.FC<FishingGameModalProps> = ({
           // Line snapped!
           phaseRef.current = 'lost';
           setPhase('lost');
-          soundEffects.playStaticBurst(0.2, 0.2);
+          setStreak(0);
+          setScreenShake(false);
+          soundEffects.playStaticBurst(0.25, 0.2);
           gamepadManager.vibrate(250, 1.0, 0.8);
         } else if (tensionRef.current <= 6 && progressRef.current > 10) {
           // Hook slipped!
           phaseRef.current = 'lost';
           setPhase('lost');
+          setStreak(0);
+          setScreenShake(false);
         } else if (progressRef.current >= 100) {
           // Caught successfully!
           phaseRef.current = 'caught';
           setPhase('caught');
+          setScreenShake(false);
           handleFishLanded();
         }
 
@@ -293,21 +315,30 @@ export const FishingGameModal: React.FC<FishingGameModalProps> = ({
     return () => {
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
     };
-  }, [isOpen, speciesList]);
+  }, [isOpen, speciesList, streak, highScore, onUpdateHighScore]);
 
   // Handle successful catch
   const handleFishLanded = () => {
     const sp = hookedFishRef.current?.species || speciesList[0];
     const weight = +(sp.minWeight + Math.random() * (sp.maxWeight - sp.minWeight)).toFixed(2);
-    const coins = sp.rarity === 'Legendary' ? 140 : sp.rarity === 'Rare' ? 70 : 35;
+    const baseCoins = sp.rarity === 'Legendary' ? 140 : sp.rarity === 'Rare' ? 70 : 35;
+    const nextStreak = streak + 1;
+    setStreak(nextStreak);
+    const multiplier = nextStreak >= 4 ? 3 : nextStreak >= 3 ? 2 : nextStreak >= 2 ? 1.5 : 1;
+    const coins = Math.round(baseCoins * multiplier);
 
-    setActiveFish({ species: sp, weight, coins });
+    const isRecord = weight > (highScore || 0);
+    if (isRecord && onUpdateHighScore) {
+      onUpdateHighScore(weight);
+    }
+
+    setActiveFish({ species: sp, weight, coins, isRecord });
     soundEffects.playTriumphChime();
     gamepadManager.vibrate(300, 0.7, 0.5);
 
     confetti({
-      particleCount: 85,
-      spread: 65,
+      particleCount: isRecord ? 130 : 85,
+      spread: isRecord ? 85 : 65,
       origin: { y: 0.6 }
     });
 
@@ -320,7 +351,8 @@ export const FishingGameModal: React.FC<FishingGameModalProps> = ({
       city: cityName,
       country: countryName,
       description: `${sp.rarity} trophy catch from ${waterwayName || cityName}. ${sp.funFact}`,
-      acquiredAt: new Date().toISOString()
+      acquiredAt: new Date().toISOString(),
+      priceCoins: coins
     });
   };
 
@@ -332,6 +364,7 @@ export const FishingGameModal: React.FC<FishingGameModalProps> = ({
     progressRef.current = 20;
     bobberRef.current = { x: 120, y: 140, targetX: 350, inWater: false };
     hookedFishRef.current = null;
+    setScreenShake(false);
   };
 
   if (!isOpen) return null;
@@ -360,16 +393,27 @@ export const FishingGameModal: React.FC<FishingGameModalProps> = ({
             </div>
           </div>
 
-          <button
-            onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5 font-mono text-xs font-bold text-amber-300 bg-amber-950/80 px-2.5 py-1 rounded-xl border border-amber-500/30">
+              <Trophy className="w-3.5 h-3.5 text-amber-400" />
+              <span>Record: {highScore > 0 ? `${highScore} kg` : 'None'}</span>
+            </div>
+            {streak > 0 && (
+              <div className="flex items-center gap-1.5 font-mono text-xs font-bold text-emerald-300 bg-emerald-950/80 px-2.5 py-1 rounded-xl border border-emerald-500/30">
+                <span>🔥 Streak: {streak}x ({streak >= 4 ? '3x' : streak >= 3 ? '2x' : streak >= 2 ? '1.5x' : '1x'} Coins)</span>
+              </div>
+            )}
+            <button
+              onClick={onClose}
+              className="p-1.5 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Live Simulation Canvas */}
-        <div className="relative w-full h-[450px] bg-slate-950 flex items-center justify-center overflow-hidden">
+        <div className={`relative w-full h-[450px] bg-slate-950 flex items-center justify-center overflow-hidden ${screenShake ? 'ring-2 ring-rose-500 animate-pulse' : ''}`}>
           <canvas
             ref={canvasRef}
             width={860}
@@ -405,20 +449,38 @@ export const FishingGameModal: React.FC<FishingGameModalProps> = ({
           {phase === 'fight' && (
             <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 w-96 bg-slate-950/90 backdrop-blur-md border border-sky-400/40 p-3 rounded-2xl shadow-2xl flex flex-col gap-2">
               <div className="flex justify-between text-xs font-mono font-bold">
-                <span className={tension > 80 ? 'text-rose-400 animate-pulse' : 'text-slate-300'}>
-                  Line Tension: {tension}%
+                <span className={tension > 80 ? 'text-rose-400 animate-pulse font-black' : tension >= 35 && tension <= 65 ? 'text-emerald-400 font-black' : 'text-slate-300'}>
+                  Line Tension: {tension}% {tension > 85 ? '⚠ STRAIN!' : tension >= 35 && tension <= 65 ? '✦ SWEET SPOT' : ''}
                 </span>
                 <span className="text-sky-400">Reel Progress: {catchProgress}%</span>
               </div>
 
-              {/* Tension Bar */}
-              <div className="w-full h-3 bg-slate-800 rounded-full overflow-hidden p-0.5 relative">
+              {/* Tension Bar with Sweet Spot Indicators */}
+              <div className="w-full h-4 bg-slate-900 rounded-full overflow-hidden p-0.5 relative border border-slate-800">
+                {/* Sweet Spot Band (35% to 65%) */}
+                <div
+                  className="absolute top-0 bottom-0 bg-emerald-500/25 border-x border-emerald-400/60 pointer-events-none"
+                  style={{ left: '35%', width: '30%' }}
+                />
                 <div
                   className={`h-full rounded-full transition-all duration-75 ${
-                    tension > 85 ? 'bg-rose-500' : tension < 20 ? 'bg-amber-400' : 'bg-emerald-400'
+                    tension > 85
+                      ? 'bg-rose-500 shadow-md shadow-rose-500/50'
+                      : tension >= 35 && tension <= 65
+                      ? 'bg-emerald-400 shadow-md shadow-emerald-400/50'
+                      : 'bg-amber-400'
                   }`}
                   style={{ width: `${tension}%` }}
                 />
+              </div>
+
+              {/* Sweet spot status indicator */}
+              <div className="flex justify-between items-center text-[10px] font-mono">
+                <span className="text-slate-400">Slack</span>
+                <span className={tension >= 35 && tension <= 65 ? "text-emerald-400 font-bold" : "text-slate-500"}>
+                  ✦ GREEN ZONE: +80% REEL TORQUE ✦
+                </span>
+                <span className="text-slate-400">Snap (95%)</span>
               </div>
 
               {/* Catch Progress */}
@@ -438,6 +500,11 @@ export const FishingGameModal: React.FC<FishingGameModalProps> = ({
           {/* Phase HUD: Caught Celebration Card */}
           {phase === 'caught' && activeFish && (
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 bg-slate-950/95 border border-emerald-400/60 p-6 rounded-3xl shadow-2xl flex flex-col items-center gap-2 text-center animate-in zoom-in-95 duration-200">
+              {activeFish.isRecord && (
+                <div className="bg-gradient-to-r from-amber-400 to-yellow-500 text-slate-950 font-black text-xs px-3 py-1 rounded-full uppercase tracking-wider animate-bounce shadow-lg flex items-center gap-1.5">
+                  <Trophy className="w-3.5 h-3.5" /> NEW PERSONAL BEST RECORD!
+                </div>
+              )}
               <div className="text-5xl">{activeFish.species.icon}</div>
               <h3 className="text-xl font-black text-emerald-300">{activeFish.species.name}</h3>
               <div className="flex items-center gap-2 text-xs font-mono">

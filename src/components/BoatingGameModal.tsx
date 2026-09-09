@@ -12,6 +12,8 @@ interface BoatingGameModalProps {
   waterwayName: string;
   biome: EnvironmentType;
   onEarnCoins: (amount: number) => void;
+  highScore?: number;
+  onUpdateHighScore?: (score: number) => void;
 }
 
 interface WakeParticle {
@@ -38,7 +40,9 @@ export const BoatingGameModal: React.FC<BoatingGameModalProps> = ({
   cityName,
   countryName,
   waterwayName,
-  onEarnCoins
+  onEarnCoins,
+  highScore = 0,
+  onUpdateHighScore
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -50,6 +54,8 @@ export const BoatingGameModal: React.FC<BoatingGameModalProps> = ({
   const [coinsGathered, setCoinsGathered] = useState<number>(0);
   const [dockedSuccessfully, setDockedSuccessfully] = useState<boolean>(false);
   const [hornActive, setHornActive] = useState<boolean>(false);
+  const [hullIntegrity, setHullIntegrity] = useState<number>(100);
+  const [isSunk, setIsSunk] = useState<boolean>(false);
 
   // Mutable refs for 60fps simulation
   const boatPosRef = useRef<{ x: number; y: number }>({ x: 300, y: 450 });
@@ -60,6 +66,8 @@ export const BoatingGameModal: React.FC<BoatingGameModalProps> = ({
   const wakeParticlesRef = useRef<WakeParticle[]>([]);
   const hazardsRef = useRef<WaterHazard[]>([]);
   const coinsRef = useRef<number>(0);
+  const hullRef = useRef<number>(100);
+  const isSunkRef = useRef<boolean>(false);
   const lastTimeRef = useRef<number>(performance.now());
   const animationFrameRef = useRef<number | null>(null);
 
@@ -130,6 +138,10 @@ export const BoatingGameModal: React.FC<BoatingGameModalProps> = ({
     throttleRef.current = 1;
     wakeParticlesRef.current = [];
     coinsRef.current = 0;
+    hullRef.current = 100;
+    isSunkRef.current = false;
+    setHullIntegrity(100);
+    setIsSunk(false);
     setDockedSuccessfully(false);
 
     // Populate Waterway channel hazards, buoys, bridge arches, and docking berth
@@ -209,14 +221,44 @@ export const BoatingGameModal: React.FC<BoatingGameModalProps> = ({
           coinsRef.current += 30;
           soundEffects.playCoinSound();
           gamepadManager.vibrate(60, 0.4, 0.2);
+        } else if (h.type === 'ferry' && dist < 40 && !isSunkRef.current) {
+          // Ferry collision — 20% hull damage
+          hullRef.current = Math.max(0, hullRef.current - 20);
+          setHullIntegrity(hullRef.current);
+          boatSpeedRef.current *= -0.3; // Bounce back
+          soundEffects.playStaticBurst(0.2, 0.3);
+          gamepadManager.vibrate(300, 0.9, 0.7);
+          if (hullRef.current <= 0) {
+            isSunkRef.current = true;
+            setIsSunk(true);
+            boatSpeedRef.current = 0;
+          }
         } else if (h.type === 'dock' && dist < 45) {
-          // Check docking speed
-          if (Math.abs(boatSpeedRef.current) < 12) {
+          // Check docking speed — precision bonus
+          if (Math.abs(boatSpeedRef.current) < 12 && !dockedSuccessfully) {
+            const speedBonus = Math.abs(boatSpeedRef.current) < 5 ? 80 : 50;
+            coinsRef.current += speedBonus;
             setDockedSuccessfully(true);
             soundEffects.playTriumphChime();
           }
         }
       });
+
+      // Quay wall collision (running aground)
+      if (boatPosRef.current.x < 80 || boatPosRef.current.x > canvas.width - 80) {
+        if (!isSunkRef.current) {
+          hullRef.current = Math.max(0, hullRef.current - 10 * dt * 2);
+          setHullIntegrity(Math.round(hullRef.current));
+          // Bounce off wall
+          boatPosRef.current.x = boatPosRef.current.x < 80 ? 82 : canvas.width - 82;
+          boatSpeedRef.current *= 0.5;
+          if (hullRef.current <= 0) {
+            isSunkRef.current = true;
+            setIsSunk(true);
+            boatSpeedRef.current = 0;
+          }
+        }
+      }
 
       // Update React HUD states
       setKnots(Math.round(Math.abs(boatSpeedRef.current) / 3));
@@ -252,7 +294,25 @@ export const BoatingGameModal: React.FC<BoatingGameModalProps> = ({
       });
 
       // 5. Boat Vessel (Hull, Deck, Wheelhouse, Navigation Lights)
-      renderBoat(ctx, boatPosRef.current.x, boatPosRef.current.y, boatHeadingRef.current);
+      if (!isSunkRef.current) {
+        renderBoat(ctx, boatPosRef.current.x, boatPosRef.current.y, boatHeadingRef.current);
+      }
+
+      // 6. Compass Rose (top-right of canvas)
+      renderCompassRose(ctx, W - 55, 55, boatHeadingRef.current);
+
+      // 7. Hull integrity bar on canvas
+      const barW = 120;
+      const barX = (W - barW) / 2;
+      ctx.fillStyle = 'rgba(0,0,0,0.4)';
+      ctx.fillRect(barX, H - 16, barW, 10);
+      const hullPct = hullRef.current / 100;
+      ctx.fillStyle = hullPct > 0.5 ? '#22c55e' : hullPct > 0.25 ? '#f59e0b' : '#ef4444';
+      ctx.fillRect(barX, H - 16, barW * hullPct, 10);
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 8px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(`HULL ${Math.round(hullRef.current)}%`, W / 2, H - 8);
 
       animationFrameRef.current = requestAnimationFrame(simLoop);
     };
@@ -268,6 +328,9 @@ export const BoatingGameModal: React.FC<BoatingGameModalProps> = ({
     let finalReward = coinsGathered;
     if (dockedSuccessfully) finalReward += 50;
     if (finalReward > 0) onEarnCoins(finalReward);
+    if (onUpdateHighScore && finalReward > highScore) {
+      onUpdateHighScore(finalReward);
+    }
     onClose();
   };
 
@@ -339,18 +402,37 @@ export const BoatingGameModal: React.FC<BoatingGameModalProps> = ({
           </div>
 
           {/* Floating Dock Status & Salvage Coins (Top Right) */}
-          <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
+          <div className="absolute top-4 right-4 z-10 flex flex-col gap-2">
+            {/* Hull Integrity */}
+            <div className={`backdrop-blur-md border px-3 py-1.5 rounded-2xl flex items-center gap-2 shadow-xl ${
+              hullIntegrity > 50 ? 'bg-slate-950/85 border-emerald-500/40' : hullIntegrity > 25 ? 'bg-amber-950/85 border-amber-500/40' : 'bg-red-950/85 border-red-500/40 animate-pulse'
+            }`}>
+              <Ship className="w-4 h-4 text-sky-400" />
+              <div>
+                <div className="text-[10px] font-bold text-slate-300">Hull Integrity</div>
+                <div className={`text-lg font-black font-mono ${hullIntegrity > 50 ? 'text-emerald-400' : hullIntegrity > 25 ? 'text-amber-400' : 'text-red-400'}`}>
+                  {hullIntegrity}%
+                </div>
+              </div>
+            </div>
+
             {dockedSuccessfully ? (
               <div className="bg-emerald-950/90 backdrop-blur-md border border-emerald-400 px-3.5 py-2 rounded-2xl text-xs font-mono text-emerald-300 flex items-center gap-2 shadow-xl animate-pulse">
                 <Anchor className="w-4 h-4 text-emerald-400" />
                 <div>
                   <div className="font-bold">BERTH DOCKED!</div>
-                  <div className="text-[10px] text-emerald-400">+50 Marina Bonus</div>
+                  <div className="text-[10px] text-emerald-400">Precision Bonus Earned</div>
                 </div>
               </div>
             ) : (
               <div className="bg-slate-950/80 backdrop-blur-md border border-slate-800 px-3 py-2 rounded-2xl text-[11px] font-mono text-slate-400">
                 Dock Slip Ahead (Speed &lt; 4 kt)
+              </div>
+            )}
+
+            {highScore > 0 && (
+              <div className="bg-slate-900/85 backdrop-blur-md border border-slate-700 px-3 py-1.5 rounded-2xl shadow-xl text-xs font-mono text-slate-300">
+                Record: <strong className="text-sky-400">{highScore} coins</strong>
               </div>
             )}
 
@@ -362,6 +444,18 @@ export const BoatingGameModal: React.FC<BoatingGameModalProps> = ({
               </div>
             </div>
           </div>
+
+          {/* Sunk Overlay */}
+          {isSunk && (
+            <div className="absolute inset-0 z-30 bg-sky-950/80 backdrop-blur-sm flex flex-col items-center justify-center gap-4">
+              <div className="text-5xl font-black text-red-400 animate-pulse">🚢 HULL BREACHED!</div>
+              <div className="text-sm text-sky-200">Your vessel has taken on water and is sinking.</div>
+              <div className="text-lg font-bold text-amber-400">Cargo Salvaged: +{coinsGathered}</div>
+              <button onClick={handleFinish} className="px-6 py-2 bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold rounded-xl">
+                <Anchor className="w-4 h-4 inline mr-1" /> Abandon Ship & Bank Coins
+              </button>
+            </div>
+          )}
 
           {/* Engine Telegraph Floating Controls (Bottom Center) */}
           <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 bg-slate-950/90 backdrop-blur-md p-1.5 rounded-2xl border border-sky-500/30 shadow-2xl">
@@ -594,6 +688,51 @@ function renderBoat(ctx: CanvasRenderingContext2D, x: number, y: number, heading
   ctx.fillStyle = '#22c55e'; // Green Starboard
   ctx.beginPath();
   ctx.arc(13, -12, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function renderCompassRose(ctx: CanvasRenderingContext2D, cx: number, cy: number, headingDeg: number) {
+  const radius = 32;
+
+  ctx.save();
+  ctx.translate(cx, cy);
+
+  // Background circle
+  ctx.fillStyle = 'rgba(15, 23, 42, 0.7)';
+  ctx.beginPath();
+  ctx.arc(0, 0, radius + 4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(56, 189, 248, 0.4)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Rotate opposite to heading so N always points up relative to world
+  ctx.rotate((-headingDeg * Math.PI) / 180);
+
+  // Cardinal direction lines
+  const cardinals = ['N', 'E', 'S', 'W'];
+  const colors = ['#ef4444', '#94a3b8', '#94a3b8', '#94a3b8'];
+  for (let i = 0; i < 4; i++) {
+    const angle = (i * 90 * Math.PI) / 180;
+    const x = Math.sin(angle) * (radius - 6);
+    const y = -Math.cos(angle) * (radius - 6);
+
+    ctx.fillStyle = colors[i];
+    ctx.font = 'bold 10px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(cardinals[i], x, y);
+  }
+
+  // North arrow (triangle pointer)
+  ctx.fillStyle = '#ef4444';
+  ctx.beginPath();
+  ctx.moveTo(0, -radius + 12);
+  ctx.lineTo(-4, -radius + 20);
+  ctx.lineTo(4, -radius + 20);
+  ctx.closePath();
   ctx.fill();
 
   ctx.restore();

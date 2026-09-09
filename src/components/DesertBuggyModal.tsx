@@ -9,7 +9,11 @@ interface DesertBuggyModalProps {
   cityName: string;
   countryName: string;
   onEarnCoins: (amount: number) => void;
+  highScore?: number;
+  onUpdateHighScore?: (score: number) => void;
 }
+
+type BuggyState = 'racing' | 'airborne' | 'crashed' | 'finished';
 
 interface SandParticle {
   x: number;
@@ -23,7 +27,7 @@ interface SandParticle {
 interface DuneHazard {
   x: number;
   z: number;
-  type: 'rock' | 'cactus' | 'cell' | 'oasis';
+  type: 'rock' | 'cactus' | 'cell' | 'oasis' | 'ramp';
   width: number;
   height: number;
 }
@@ -33,7 +37,9 @@ export const DesertBuggyModal: React.FC<DesertBuggyModalProps> = ({
   onClose,
   cityName,
   countryName,
-  onEarnCoins
+  onEarnCoins,
+  highScore = 0,
+  onUpdateHighScore
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -41,6 +47,11 @@ export const DesertBuggyModal: React.FC<DesertBuggyModalProps> = ({
   const [coinsCollected, setCoinsCollected] = useState<number>(0);
   const [boostActive, setBoostActive] = useState<boolean>(false);
   const [distanceMeters, setDistanceMeters] = useState<number>(0);
+  const [health, setHealth] = useState<number>(3);
+  const [nitroFuel, setNitroFuel] = useState<number>(100);
+  const [buggyState, setBuggyState] = useState<BuggyState>('racing');
+  const [airTimeBonus, setAirTimeBonus] = useState<number>(0);
+  const FINISH_DISTANCE = 3000;
 
   // Mutable refs for 60fps loop
   const playerXRef = useRef<number>(0); // -0.85 to 0.85
@@ -51,10 +62,17 @@ export const DesertBuggyModal: React.FC<DesertBuggyModalProps> = ({
   const hazardsRef = useRef<DuneHazard[]>([]);
   const distanceRef = useRef<number>(0);
   const coinsRef = useRef<number>(0);
+  const healthRef = useRef<number>(3);
+  const nitroRef = useRef<number>(100);
+  const airTimerRef = useRef<number>(0);
+  const crashTimerRef = useRef<number>(0);
+  const buggyStateRef = useRef<BuggyState>('racing');
   const lastTimeRef = useRef<number>(performance.now());
   const animationFrameRef = useRef<number | null>(null);
+  const shakeRef = useRef<number>(0);
 
   const triggerBoost = useCallback(() => {
+    if (nitroRef.current < 15 || buggyStateRef.current !== 'racing') return;
     boostRef.current = true;
     setBoostActive(true);
     soundEffects.playRadarPing(800, 0.15);
@@ -112,8 +130,18 @@ export const DesertBuggyModal: React.FC<DesertBuggyModalProps> = ({
     playerXRef.current = 0;
     distanceRef.current = 0;
     coinsRef.current = 0;
+    healthRef.current = 3;
+    nitroRef.current = 100;
+    airTimerRef.current = 0;
+    crashTimerRef.current = 0;
+    buggyStateRef.current = 'racing';
+    shakeRef.current = 0;
     hazardsRef.current = [];
     sandParticlesRef.current = [];
+    setHealth(3);
+    setNitroFuel(100);
+    setBuggyState('racing');
+    setAirTimeBonus(0);
 
     // Pre-populate initial desert hazards and solar cells
     for (let i = 0; i < 8; i++) {
@@ -121,14 +149,14 @@ export const DesertBuggyModal: React.FC<DesertBuggyModalProps> = ({
     }
 
     function spawnHazard(z: number) {
-      const types: DuneHazard['type'][] = ['cell', 'cell', 'cell', 'rock', 'cactus'];
+      const types: DuneHazard['type'][] = ['cell', 'cell', 'cell', 'rock', 'cactus', 'ramp'];
       const type = types[Math.floor(Math.random() * types.length)];
       hazardsRef.current.push({
         x: (Math.random() - 0.5) * 1.6,
         z,
         type,
-        width: type === 'cell' ? 30 : 45,
-        height: type === 'cell' ? 30 : 50
+        width: type === 'cell' ? 30 : type === 'ramp' ? 60 : 45,
+        height: type === 'cell' ? 30 : type === 'ramp' ? 20 : 50
       });
     }
 
@@ -138,7 +166,52 @@ export const DesertBuggyModal: React.FC<DesertBuggyModalProps> = ({
       const dt = Math.min((currentTime - lastTimeRef.current) / 1000, 0.1);
       lastTimeRef.current = currentTime;
 
-      // Speed & Boost
+      // Check finished / crashed states
+      if (buggyStateRef.current === 'finished' || buggyStateRef.current === 'crashed') {
+        // Still render the static scene
+        renderFrame(ctx, canvas.width, canvas.height, currentTime);
+        animationFrameRef.current = requestAnimationFrame(loop);
+        return;
+      }
+
+      // Crash recovery timer
+      if (crashTimerRef.current > 0) {
+        crashTimerRef.current -= dt;
+        shakeRef.current = crashTimerRef.current * 12;
+        if (crashTimerRef.current <= 0) {
+          shakeRef.current = 0;
+          speedRef.current = 20;
+        }
+        renderFrame(ctx, canvas.width, canvas.height, currentTime);
+        animationFrameRef.current = requestAnimationFrame(loop);
+        return;
+      }
+
+      // Airborne state
+      if (buggyStateRef.current === 'airborne') {
+        airTimerRef.current -= dt;
+        if (airTimerRef.current <= 0) {
+          buggyStateRef.current = 'racing';
+          setBuggyState('racing');
+          const bonus = Math.round(airTimerRef.current * -1 + 1.5) * 20;
+          coinsRef.current += bonus;
+          setAirTimeBonus(bonus);
+          soundEffects.playCoinSound();
+          setTimeout(() => setAirTimeBonus(0), 1200);
+        }
+      }
+
+      // Speed & Boost — nitro depletes fuel
+      if (boostRef.current && nitroRef.current > 0) {
+        nitroRef.current = Math.max(0, nitroRef.current - 35 * dt);
+        if (nitroRef.current <= 0) {
+          boostRef.current = false;
+          setBoostActive(false);
+        }
+      } else {
+        // Nitro recharges slowly
+        nitroRef.current = Math.min(100, nitroRef.current + 8 * dt);
+      }
       const maxSpeed = boostRef.current ? 75 : 45;
       speedRef.current += (maxSpeed - speedRef.current) * dt * 2.0;
 
@@ -150,6 +223,17 @@ export const DesertBuggyModal: React.FC<DesertBuggyModalProps> = ({
       const step = (speedRef.current / 3.6) * dt * 10;
       distanceRef.current += step;
 
+      // Check finish line
+      if (distanceRef.current >= FINISH_DISTANCE) {
+        buggyStateRef.current = 'finished';
+        setBuggyState('finished');
+        if (onUpdateHighScore && Math.round(distanceRef.current) > highScore) {
+          onUpdateHighScore(Math.round(distanceRef.current));
+        }
+        soundEffects.playTriumphChime();
+        gamepadManager.vibrate(300, 0.6, 0.4);
+      }
+
       // Spawn new items
       nextSpawn += step;
       if (nextSpawn > 80) {
@@ -157,8 +241,8 @@ export const DesertBuggyModal: React.FC<DesertBuggyModalProps> = ({
         spawnHazard(950);
       }
 
-      // Sand spray from knobby tires
-      if (speedRef.current > 15) {
+      // Sand spray from knobby tires (only when on ground)
+      if (speedRef.current > 15 && buggyStateRef.current === 'racing') {
         sandParticlesRef.current.push({
           x: canvas.width / 2 + playerXRef.current * (canvas.width * 0.35) - 30 + (Math.random() - 0.5) * 10,
           y: canvas.height - 30,
@@ -203,13 +287,36 @@ export const DesertBuggyModal: React.FC<DesertBuggyModalProps> = ({
               hazardsRef.current.splice(i, 1);
               continue;
             }
+          } else if (h.type === 'ramp') {
+            if (dx < 0.32 && buggyStateRef.current === 'racing') {
+              // Launch airborne!
+              buggyStateRef.current = 'airborne';
+              setBuggyState('airborne');
+              airTimerRef.current = 1.2 + (speedRef.current / 80) * 0.8;
+              soundEffects.playRadarPing(600, 0.2);
+              gamepadManager.vibrate(150, 0.5, 0.3);
+              hazardsRef.current.splice(i, 1);
+              continue;
+            }
           } else {
             if (dx < 0.22) {
-              // Hit desert rock / cactus
-              speedRef.current = 15;
+              // Hit desert rock / cactus — lose health
+              healthRef.current -= 1;
+              setHealth(healthRef.current);
+              crashTimerRef.current = 0.8;
+              speedRef.current = 10;
               soundEffects.playStaticBurst(0.12, 0.2);
-              gamepadManager.vibrate(200, 0.9, 0.7);
+              gamepadManager.vibrate(300, 1.0, 0.8);
               h.z = -50;
+
+              if (healthRef.current <= 0) {
+                buggyStateRef.current = 'crashed';
+                setBuggyState('crashed');
+                if (onUpdateHighScore && Math.round(distanceRef.current) > highScore) {
+                  onUpdateHighScore(Math.round(distanceRef.current));
+                }
+                soundEffects.playStaticBurst(0.3, 0.4);
+              }
             }
           }
         }
@@ -222,36 +329,55 @@ export const DesertBuggyModal: React.FC<DesertBuggyModalProps> = ({
       setSpeed(Math.round(speedRef.current));
       setDistanceMeters(Math.round(distanceRef.current));
       setCoinsCollected(coinsRef.current);
+      setNitroFuel(Math.round(nitroRef.current));
 
-      // ----------------------------------------------------
-      // RENDER CANVAS
-      // ----------------------------------------------------
-      const W = canvas.width;
-      const H = canvas.height;
-      ctx.clearRect(0, 0, W, H);
+      renderFrame(ctx, canvas.width, canvas.height, currentTime);
+      animationFrameRef.current = requestAnimationFrame(loop);
+    };
 
-      // Desert Sunset Sky & Rolling Dunes
-      renderDesertSkyAndDunes(ctx, W, H, currentTime);
+    function renderFrame(rctx: CanvasRenderingContext2D, W: number, H: number, time: number) {
+      rctx.save();
+      // Screen shake on crash
+      if (shakeRef.current > 0) {
+        const sx = (Math.random() - 0.5) * shakeRef.current;
+        const sy = (Math.random() - 0.5) * shakeRef.current;
+        rctx.translate(sx, sy);
+      }
+      rctx.clearRect(-10, -10, W + 20, H + 20);
+
+      renderDesertSkyAndDunes(rctx, W, H, time);
 
       // Sand spray
       sandParticlesRef.current.forEach(p => {
-        ctx.fillStyle = `rgba(253, 186, 116, ${p.alpha})`;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        ctx.fill();
+        rctx.fillStyle = `rgba(253, 186, 116, ${p.alpha})`;
+        rctx.beginPath();
+        rctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        rctx.fill();
       });
+
+      // Distance progress bar toward finish
+      const progressPct = Math.min(1, distanceRef.current / FINISH_DISTANCE);
+      rctx.fillStyle = 'rgba(0,0,0,0.4)';
+      rctx.fillRect(W * 0.1, H - 14, W * 0.8, 8);
+      rctx.fillStyle = '#f97316';
+      rctx.fillRect(W * 0.1, H - 14, W * 0.8 * progressPct, 8);
+      rctx.fillStyle = '#fde047';
+      rctx.font = 'bold 9px sans-serif';
+      rctx.textAlign = 'center';
+      rctx.fillText(`${Math.round(distanceRef.current)}m / ${FINISH_DISTANCE}m`, W / 2, H - 6);
 
       // Desert hazards sorted by depth
       const sorted = [...hazardsRef.current].sort((a, b) => b.z - a.z);
       sorted.forEach(h => {
-        renderDuneHazard(ctx, W, H, h);
+        renderDuneHazard(rctx, W, H, h);
       });
 
-      // Roll-cage Dune Buggy (Player)
-      renderDuneBuggy(ctx, W, H, playerXRef.current, steerInputRef.current, speedRef.current, currentTime);
+      // Dune Buggy — offset upward if airborne
+      const airOffset = buggyStateRef.current === 'airborne' ? -40 - Math.sin(airTimerRef.current * 4) * 20 : 0;
+      renderDuneBuggy(rctx, W, H, playerXRef.current, steerInputRef.current, speedRef.current, time, airOffset);
 
-      animationFrameRef.current = requestAnimationFrame(loop);
-    };
+      rctx.restore();
+    }
 
     animationFrameRef.current = requestAnimationFrame(loop);
 
@@ -263,6 +389,9 @@ export const DesertBuggyModal: React.FC<DesertBuggyModalProps> = ({
   const handleExit = () => {
     if (coinsRef.current > 0) {
       onEarnCoins(coinsRef.current);
+    }
+    if (onUpdateHighScore && Math.round(distanceRef.current) > highScore) {
+      onUpdateHighScore(Math.round(distanceRef.current));
     }
     onClose();
   };
@@ -311,59 +440,116 @@ export const DesertBuggyModal: React.FC<DesertBuggyModalProps> = ({
           />
 
           {/* Speed & Stats */}
-          <div className="absolute top-4 left-4 z-10 flex items-center gap-3">
+          <div className="absolute top-4 left-4 z-10 flex flex-col gap-2">
             <div className="bg-slate-950/85 backdrop-blur-md border border-orange-500/40 px-4 py-2.5 rounded-2xl shadow-xl">
               <div className="text-3xl font-black font-mono tracking-tight text-orange-400">
                 {speed} <span className="text-xs text-slate-400 font-normal">km/h</span>
               </div>
-              <div className="text-[10px] font-mono text-slate-400">Dune Distance: {distanceMeters} m</div>
+              <div className="text-[10px] font-mono text-slate-400">Dune Distance: {distanceMeters}m / {FINISH_DISTANCE}m</div>
+            </div>
+
+            {/* Health Pips */}
+            <div className="bg-slate-950/85 backdrop-blur-md border border-red-500/40 px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+              <span className="text-[10px] text-red-300 font-bold">HULL:</span>
+              {[1, 2, 3].map(i => (
+                <div key={i} className={`w-5 h-3 rounded-sm ${i <= health ? 'bg-red-500' : 'bg-slate-800'}`} />
+              ))}
+            </div>
+
+            {/* Nitro Fuel Gauge */}
+            <div className="bg-slate-950/85 backdrop-blur-md border border-amber-500/40 px-3 py-1.5 rounded-xl">
+              <div className="text-[10px] text-amber-300 font-bold mb-1">NITRO FUEL</div>
+              <div className="w-28 h-2 bg-slate-800 rounded-full overflow-hidden">
+                <div className={`h-full rounded-full transition-all ${nitroFuel > 30 ? 'bg-amber-400' : 'bg-red-500'}`} style={{ width: `${nitroFuel}%` }} />
+              </div>
             </div>
 
             {boostActive && (
               <div className="bg-amber-500 text-slate-950 font-black text-xs px-3 py-1.5 rounded-xl shadow-lg animate-pulse flex items-center gap-1">
-                <Flame className="w-4 h-4 fill-slate-950" /> NITRO BOOST ACTIVE!
+                <Flame className="w-4 h-4 fill-slate-950" /> NITRO ACTIVE!
               </div>
             )}
           </div>
 
-          {/* Solar Battery Score */}
-          <div className="absolute top-4 right-4 z-10 bg-amber-950/85 backdrop-blur-md border border-amber-500/40 px-4 py-2 rounded-2xl shadow-xl flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-amber-400" />
-            <div>
-              <div className="text-xs text-amber-300 font-bold">Solar Cells:</div>
-              <div className="text-lg font-black font-mono text-amber-400">+{coinsCollected}</div>
+          {/* Airtime Bonus */}
+          {airTimeBonus > 0 && (
+            <div className="absolute top-1/3 left-1/2 -translate-x-1/2 z-20 text-3xl font-black text-amber-400 animate-bounce drop-shadow-lg">
+              🪂 AIR TIME +{airTimeBonus}!
+            </div>
+          )}
+
+          {/* Solar Battery Score & Record */}
+          <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
+            {highScore > 0 && (
+              <div className="bg-slate-900/85 backdrop-blur-md border border-slate-700 px-3.5 py-2 rounded-2xl shadow-xl text-xs font-mono text-slate-300">
+                Record: <strong className="text-amber-400">{highScore}m</strong>
+              </div>
+            )}
+            <div className="bg-amber-950/85 backdrop-blur-md border border-amber-500/40 px-4 py-2 rounded-2xl shadow-xl flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-amber-400" />
+              <div>
+                <div className="text-xs text-amber-300 font-bold">Solar Cells:</div>
+                <div className="text-lg font-black font-mono text-amber-400">+{coinsCollected}</div>
+              </div>
             </div>
           </div>
 
+          {/* Crashed Overlay */}
+          {buggyState === 'crashed' && (
+            <div className="absolute inset-0 z-30 bg-red-950/80 backdrop-blur-sm flex flex-col items-center justify-center gap-4">
+              <div className="text-5xl font-black text-red-400 animate-pulse">💥 WRECKED!</div>
+              <div className="text-sm text-red-200">Your buggy hit too many obstacles.</div>
+              <div className="text-lg font-bold text-amber-400">Solar Cells Collected: +{coinsCollected}</div>
+              <button onClick={handleExit} className="px-6 py-2 bg-orange-500 hover:bg-orange-400 text-slate-950 font-bold rounded-xl">
+                <Trophy className="w-4 h-4 inline mr-1" /> Bank Coins & Exit
+              </button>
+            </div>
+          )}
+
+          {/* Finished Overlay */}
+          {buggyState === 'finished' && (
+            <div className="absolute inset-0 z-30 bg-amber-950/80 backdrop-blur-sm flex flex-col items-center justify-center gap-4">
+              <div className="text-5xl font-black text-amber-400">🏁 FINISH!</div>
+              <div className="text-sm text-amber-200">You conquered {FINISH_DISTANCE}m of desert dunes!</div>
+              <div className="text-lg font-bold text-amber-400">Solar Cells: +{coinsCollected} • Hull Remaining: {health}/3</div>
+              {health === 3 && <div className="text-xs text-green-400 font-bold">🏆 PERFECT RUN — No Damage!</div>}
+              <button onClick={handleExit} className="px-6 py-2 bg-orange-500 hover:bg-orange-400 text-slate-950 font-bold rounded-xl">
+                <Trophy className="w-4 h-4 inline mr-1" /> Bank Coins & Exit
+              </button>
+            </div>
+          )}
+
           {/* Quick On-Screen Touch Controls */}
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2">
-            <button
-              onMouseDown={() => (steerInputRef.current = -1)}
-              onMouseUp={() => (steerInputRef.current = 0)}
-              onTouchStart={() => (steerInputRef.current = -1)}
-              onTouchEnd={() => (steerInputRef.current = 0)}
-              className="px-4 py-2.5 bg-slate-900/90 border border-slate-700 text-slate-200 rounded-2xl text-xs font-bold active:scale-95"
-            >
-              ◀ Left (A)
-            </button>
+          {buggyState === 'racing' && (
+            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2">
+              <button
+                onMouseDown={() => (steerInputRef.current = -1)}
+                onMouseUp={() => (steerInputRef.current = 0)}
+                onTouchStart={() => (steerInputRef.current = -1)}
+                onTouchEnd={() => (steerInputRef.current = 0)}
+                className="px-4 py-2.5 bg-slate-900/90 border border-slate-700 text-slate-200 rounded-2xl text-xs font-bold active:scale-95"
+              >
+                ◀ Left (A)
+              </button>
 
-            <button
-              onClick={triggerBoost}
-              className="px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-black text-sm rounded-2xl shadow-xl shadow-orange-500/30 active:scale-90 flex items-center gap-1.5"
-            >
-              <Flame className="w-4 h-4 fill-slate-950" /> BOOST NITRO! (Space / W)
-            </button>
+              <button
+                onClick={triggerBoost}
+                className={`px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-black text-sm rounded-2xl shadow-xl shadow-orange-500/30 active:scale-90 flex items-center gap-1.5 ${nitroFuel < 15 ? 'opacity-40' : ''}`}
+              >
+                <Flame className="w-4 h-4 fill-slate-950" /> BOOST ({Math.round(nitroFuel)}%)
+              </button>
 
-            <button
-              onMouseDown={() => (steerInputRef.current = 1)}
-              onMouseUp={() => (steerInputRef.current = 0)}
-              onTouchStart={() => (steerInputRef.current = 1)}
-              onTouchEnd={() => (steerInputRef.current = 0)}
-              className="px-4 py-2.5 bg-slate-900/90 border border-slate-700 text-slate-200 rounded-2xl text-xs font-bold active:scale-95"
-            >
-              Right (D) ▶
-            </button>
-          </div>
+              <button
+                onMouseDown={() => (steerInputRef.current = 1)}
+                onMouseUp={() => (steerInputRef.current = 0)}
+                onTouchStart={() => (steerInputRef.current = 1)}
+                onTouchEnd={() => (steerInputRef.current = 0)}
+                className="px-4 py-2.5 bg-slate-900/90 border border-slate-700 text-slate-200 rounded-2xl text-xs font-bold active:scale-95"
+              >
+                Right (D) ▶
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Footer */}
@@ -469,6 +655,22 @@ function renderDuneHazard(ctx: CanvasRenderingContext2D, W: number, H: number, h
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('⚡', 0, -drawH / 2);
+  } else if (h.type === 'ramp') {
+    // Sand Dune Ramp
+    ctx.fillStyle = '#d97706';
+    ctx.beginPath();
+    ctx.moveTo(-drawW / 2, 0);
+    ctx.lineTo(drawW / 2, 0);
+    ctx.lineTo(0, -drawH * 1.5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#fbbf24';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = '#fef08a';
+    ctx.font = 'bold 10px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('▲', 0, -drawH * 0.5);
   } else if (h.type === 'cactus') {
     // Saguaro Cactus
     ctx.fillStyle = '#15803d';
@@ -493,15 +695,24 @@ function renderDuneBuggy(
   playerX: number,
   steerInput: number,
   speed: number,
-  time: number
+  time: number,
+  airOffset: number = 0
 ) {
   const baseX = W / 2 + playerX * (W * 0.35);
-  const baseY = H - 35;
-  const duneBounce = Math.sin(time * 0.02 * (speed / 20)) * 4;
+  const baseY = H - 35 + airOffset;
+  const duneBounce = airOffset === 0 ? Math.sin(time * 0.02 * (speed / 20)) * 4 : 0;
 
   ctx.save();
   ctx.translate(baseX, baseY + duneBounce);
   ctx.rotate((steerInput * 10 * Math.PI) / 180);
+
+  // Shadow when airborne
+  if (airOffset < 0) {
+    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    ctx.beginPath();
+    ctx.ellipse(0, -airOffset + 10, 50, 10, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
 
   // Big Knobby Rear Tires
   ctx.fillStyle = '#0f172a';

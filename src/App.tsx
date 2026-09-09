@@ -126,6 +126,31 @@ export function App() {
   });
   const [isBackpackOpen, setIsBackpackOpen] = useState<boolean>(false);
 
+  // Minigame High Scores persisted across sessions
+  const [highScores, setHighScores] = useState<{
+    bike: number;
+    boat: number;
+    fishing: number;
+    dj: number;
+    buggy: number;
+    ski: number;
+    surf: number;
+  }>(() => {
+    const saved = localStorage.getItem('world_radio_highscores');
+    return saved
+      ? JSON.parse(saved)
+      : { bike: 0, boat: 0, fishing: 0, dj: 0, buggy: 0, ski: 0, surf: 0 };
+  });
+
+  const handleUpdateHighScore = useCallback((game: 'bike' | 'boat' | 'fishing' | 'dj' | 'buggy' | 'ski' | 'surf', score: number) => {
+    setHighScores(prev => {
+      if (score <= (prev[game] || 0)) return prev;
+      const next = { ...prev, [game]: score };
+      localStorage.setItem('world_radio_highscores', JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
   // Dynamic Location Environment & Biome (Coastal, River, Urban, Desert, Alpine)
   const locationEnvironment = useMemo(() => {
     const placeName = selectedPlace?.title || activeStation?.place || '';
@@ -346,7 +371,7 @@ export function App() {
     if (direction === 'north') lat += stepSize;
     if (direction === 'south') lat -= stepSize;
     if (direction === 'east') lng += stepSize;
-    if (direction === 'west') lng += stepSize;
+    if (direction === 'west') lng -= stepSize;
 
     const newPos = { lat, lng };
     setPlayerCoords(newPos);
@@ -828,6 +853,8 @@ export function App() {
         countryName={activeStation?.country || selectedPlace?.country || 'World'}
         biome={locationEnvironment.biome}
         onEarnCoins={handleEarnCoins}
+        highScore={highScores.bike}
+        onUpdateHighScore={(s) => handleUpdateHighScore('bike', s)}
       />
 
       {/* Full Naval Watercraft Navigation Simulator */}
@@ -839,6 +866,8 @@ export function App() {
         waterwayName={locationEnvironment.waterwayName || 'Waterfront Harbor'}
         biome={locationEnvironment.biome}
         onEarnCoins={handleEarnCoins}
+        highScore={highScores.boat}
+        onUpdateHighScore={(s) => handleUpdateHighScore('boat', s)}
       />
 
       {/* 2D Depth Cross-Section Fishing Simulator */}
@@ -870,6 +899,8 @@ export function App() {
         cityName={activeStation?.place || selectedPlace?.title || 'Desert'}
         countryName={activeStation?.country || selectedPlace?.country || 'World'}
         onEarnCoins={handleEarnCoins}
+        highScore={highScores.buggy}
+        onUpdateHighScore={(s) => handleUpdateHighScore('buggy', s)}
       />
 
       {/* Alpine Slalom & Mountain Descent (Mountain Cities) */}
@@ -879,6 +910,8 @@ export function App() {
         cityName={activeStation?.place || selectedPlace?.title || 'Alps'}
         countryName={activeStation?.country || selectedPlace?.country || 'World'}
         onEarnCoins={handleEarnCoins}
+        highScore={highScores.ski}
+        onUpdateHighScore={(s) => handleUpdateHighScore('ski', s)}
       />
 
       {/* Ocean Swell Surfing Simulation (Coastal Ocean Cities) */}
@@ -888,6 +921,8 @@ export function App() {
         activeStation={activeStation}
         waterwayName={locationEnvironment.waterwayName}
         onAddCoins={handleEarnCoins}
+        highScore={highScores.surf}
+        onUpdateHighScore={(s) => handleUpdateHighScore('surf', s)}
       />
 
       {/* Local Store & Market Modal */}

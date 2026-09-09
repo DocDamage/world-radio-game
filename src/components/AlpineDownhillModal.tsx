@@ -9,7 +9,11 @@ interface AlpineDownhillModalProps {
   cityName: string;
   countryName: string;
   onEarnCoins: (amount: number) => void;
+  highScore?: number;
+  onUpdateHighScore?: (score: number) => void;
 }
+
+type SkiState = 'skiing' | 'wipeout' | 'finished';
 
 interface SnowParticle {
   x: number;
@@ -32,7 +36,9 @@ export const AlpineDownhillModal: React.FC<AlpineDownhillModalProps> = ({
   onClose,
   cityName,
   countryName,
-  onEarnCoins
+  onEarnCoins,
+  highScore = 0,
+  onUpdateHighScore
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -40,6 +46,9 @@ export const AlpineDownhillModal: React.FC<AlpineDownhillModalProps> = ({
   const [gatesCleared, setGatesCleared] = useState<number>(0);
   const [distanceMeters, setDistanceMeters] = useState<number>(0);
   const [coinsEarned, setCoinsEarned] = useState<number>(0);
+  const [comboCount, setComboCount] = useState<number>(0);
+  const [skiState, setSkiState] = useState<SkiState>('skiing');
+  const FINISH_DISTANCE = 2500;
 
   // Mutable 60fps loop refs
   const playerXRef = useRef<number>(0);
@@ -50,8 +59,14 @@ export const AlpineDownhillModal: React.FC<AlpineDownhillModalProps> = ({
   const distanceRef = useRef<number>(0);
   const gatesRef = useRef<number>(0);
   const coinsRef = useRef<number>(0);
+  const comboRef = useRef<number>(0);
+  const comboTimerRef = useRef<number>(0);
+  const wipeoutTimerRef = useRef<number>(0);
+  const shakeRef = useRef<number>(0);
+  const skiStateRef = useRef<SkiState>('skiing');
   const lastTimeRef = useRef<number>(performance.now());
   const animationFrameRef = useRef<number | null>(null);
+  const startTimeRef = useRef<number>(0);
 
   // Keyboard controls
   useEffect(() => {
@@ -96,11 +111,19 @@ export const AlpineDownhillModal: React.FC<AlpineDownhillModalProps> = ({
     if (!ctx) return;
 
     lastTimeRef.current = performance.now();
+    startTimeRef.current = performance.now();
     speedRef.current = 35;
     playerXRef.current = 0;
     distanceRef.current = 0;
     gatesRef.current = 0;
     coinsRef.current = 0;
+    comboRef.current = 0;
+    comboTimerRef.current = 0;
+    wipeoutTimerRef.current = 0;
+    shakeRef.current = 0;
+    skiStateRef.current = 'skiing';
+    setSkiState('skiing');
+    setComboCount(0);
     obstaclesRef.current = [];
     snowParticlesRef.current = [];
 
@@ -125,6 +148,37 @@ export const AlpineDownhillModal: React.FC<AlpineDownhillModalProps> = ({
       const dt = Math.min((currentTime - lastTimeRef.current) / 1000, 0.1);
       lastTimeRef.current = currentTime;
 
+      // Check finished state
+      if (skiStateRef.current === 'finished') {
+        renderFrame(ctx, canvas.width, canvas.height, currentTime);
+        animationFrameRef.current = requestAnimationFrame(loop);
+        return;
+      }
+
+      // Wipeout recovery timer
+      if (wipeoutTimerRef.current > 0) {
+        wipeoutTimerRef.current -= dt;
+        shakeRef.current = wipeoutTimerRef.current * 15;
+        if (wipeoutTimerRef.current <= 0) {
+          shakeRef.current = 0;
+          speedRef.current = 15;
+          skiStateRef.current = 'skiing';
+          setSkiState('skiing');
+        }
+        renderFrame(ctx, canvas.width, canvas.height, currentTime);
+        animationFrameRef.current = requestAnimationFrame(loop);
+        return;
+      }
+
+      // Combo timer decay
+      if (comboTimerRef.current > 0) {
+        comboTimerRef.current -= dt;
+        if (comboTimerRef.current <= 0) {
+          comboRef.current = 0;
+          setComboCount(0);
+        }
+      }
+
       // Gravity pulls skier down the mountain
       speedRef.current = Math.min(78, speedRef.current + 3.5 * dt);
 
@@ -135,6 +189,17 @@ export const AlpineDownhillModal: React.FC<AlpineDownhillModalProps> = ({
       // Distance
       const step = (speedRef.current / 3.6) * dt * 10;
       distanceRef.current += step;
+
+      // Check finish line
+      if (distanceRef.current >= FINISH_DISTANCE) {
+        skiStateRef.current = 'finished';
+        setSkiState('finished');
+        if (onUpdateHighScore && gatesRef.current > highScore) {
+          onUpdateHighScore(gatesRef.current);
+        }
+        soundEffects.playTriumphChime();
+        gamepadManager.vibrate(300, 0.6, 0.4);
+      }
 
       // Spawn new course gates
       nextSpawn += step;
@@ -176,24 +241,41 @@ export const AlpineDownhillModal: React.FC<AlpineDownhillModalProps> = ({
           const dx = Math.abs(obs.x - playerXRef.current);
           if (obs.type === 'gate_red' || obs.type === 'gate_blue') {
             if (dx < 0.32 && !obs.cleared) {
-              // Gate cleared!
+              // Gate cleared! Build combo
               obs.cleared = true;
               gatesRef.current += 1;
-              coinsRef.current += 15;
-              soundEffects.playRadarPing(880, 0.1);
+              comboRef.current += 1;
+              comboTimerRef.current = 3.0; // 3 second combo window
+              setComboCount(comboRef.current);
+              const comboMultiplier = Math.min(4, comboRef.current);
+              const gateCoins = 15 * comboMultiplier;
+              coinsRef.current += gateCoins;
+              soundEffects.playRadarPing(880 + comboRef.current * 100, 0.1);
               gamepadManager.vibrate(50, 0.4, 0.2);
             }
           } else if (obs.type === 'pine' || obs.type === 'rock') {
             if (dx < 0.22) {
-              // Hit pine or boulder!
-              speedRef.current = 14;
-              soundEffects.playStaticBurst(0.12, 0.2);
-              gamepadManager.vibrate(200, 0.9, 0.7);
+              // Wipeout at high speed!
+              comboRef.current = 0;
+              setComboCount(0);
+              if (speedRef.current > 55) {
+                // Full wipeout
+                skiStateRef.current = 'wipeout';
+                setSkiState('wipeout');
+                wipeoutTimerRef.current = 0.8;
+                speedRef.current = 0;
+                soundEffects.playStaticBurst(0.2, 0.3);
+                gamepadManager.vibrate(400, 1.0, 0.8);
+              } else {
+                // Minor collision
+                speedRef.current = 14;
+                soundEffects.playStaticBurst(0.12, 0.2);
+                gamepadManager.vibrate(200, 0.9, 0.7);
+              }
               obs.z = -50;
             }
           } else if (obs.type === 'knoll') {
             if (dx < 0.28 && !obs.cleared) {
-              // Jump off knoll!
               obs.cleared = true;
               soundEffects.playTriumphChime();
               gamepadManager.vibrate(80, 0.6, 0.3);
@@ -211,38 +293,48 @@ export const AlpineDownhillModal: React.FC<AlpineDownhillModalProps> = ({
       setGatesCleared(gatesRef.current);
       setCoinsEarned(coinsRef.current);
 
-      // ----------------------------------------------------
-      // RENDER CANVAS
-      // ----------------------------------------------------
-      const W = canvas.width;
-      const H = canvas.height;
-      ctx.clearRect(0, 0, W, H);
+      renderFrame(ctx, canvas.width, canvas.height, currentTime);
+      animationFrameRef.current = requestAnimationFrame(loop);
+    };
 
-      // Alpine Sky & Mountain Panorama
-      renderAlpineSky(ctx, W, H);
+    function renderFrame(rctx: CanvasRenderingContext2D, W: number, H: number, time: number) {
+      rctx.save();
+      if (shakeRef.current > 0) {
+        rctx.translate((Math.random() - 0.5) * shakeRef.current, (Math.random() - 0.5) * shakeRef.current);
+      }
+      rctx.clearRect(-10, -10, W + 20, H + 20);
 
-      // Snowy Powder Slope
-      renderSnowSlope(ctx, W, H, currentTime);
+      renderAlpineSky(rctx, W, H);
+      renderSnowSlope(rctx, W, H, time);
 
       // Snow spray particles
       snowParticlesRef.current.forEach(p => {
-        ctx.fillStyle = `rgba(255, 255, 255, ${p.alpha})`;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        ctx.fill();
+        rctx.fillStyle = `rgba(255, 255, 255, ${p.alpha})`;
+        rctx.beginPath();
+        rctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        rctx.fill();
       });
+
+      // Distance progress bar
+      const progressPct = Math.min(1, distanceRef.current / FINISH_DISTANCE);
+      rctx.fillStyle = 'rgba(0,0,0,0.3)';
+      rctx.fillRect(W * 0.1, H - 14, W * 0.8, 8);
+      rctx.fillStyle = '#38bdf8';
+      rctx.fillRect(W * 0.1, H - 14, W * 0.8 * progressPct, 8);
+      rctx.fillStyle = '#fff';
+      rctx.font = 'bold 9px sans-serif';
+      rctx.textAlign = 'center';
+      rctx.fillText(`${Math.round(distanceRef.current)}m / ${FINISH_DISTANCE}m`, W / 2, H - 6);
 
       // Course Gates and Pines (sorted by depth)
       const sorted = [...obstaclesRef.current].sort((a, b) => b.z - a.z);
       sorted.forEach(obs => {
-        renderSlalomObstacle(ctx, W, H, obs);
+        renderSlalomObstacle(rctx, W, H, obs);
       });
 
-      // Skier in Action (Foreground)
-      renderSkier(ctx, W, H, playerXRef.current, steerInputRef.current, speedRef.current, currentTime);
-
-      animationFrameRef.current = requestAnimationFrame(loop);
-    };
+      renderSkier(rctx, W, H, playerXRef.current, steerInputRef.current, speedRef.current, time);
+      rctx.restore();
+    }
 
     animationFrameRef.current = requestAnimationFrame(loop);
 
@@ -302,12 +394,12 @@ export const AlpineDownhillModal: React.FC<AlpineDownhillModalProps> = ({
           />
 
           {/* Speed & Stats (Top Left) */}
-          <div className="absolute top-4 left-4 z-10 flex items-center gap-3">
+          <div className="absolute top-4 left-4 z-10 flex flex-col gap-2">
             <div className="bg-slate-950/85 backdrop-blur-md border border-sky-400/30 px-4 py-2.5 rounded-2xl shadow-xl">
               <div className="text-3xl font-black font-mono tracking-tight text-sky-400">
                 {speed} <span className="text-xs text-slate-400 font-normal">km/h</span>
               </div>
-              <div className="text-[10px] font-mono text-slate-400">Descent Distance: {distanceMeters} m</div>
+              <div className="text-[10px] font-mono text-slate-400">Descent: {distanceMeters}m / {FINISH_DISTANCE}m</div>
             </div>
 
             <div className="bg-slate-950/85 backdrop-blur-md border border-slate-800 px-3.5 py-2 rounded-2xl shadow-xl flex items-center gap-2">
@@ -319,37 +411,77 @@ export const AlpineDownhillModal: React.FC<AlpineDownhillModalProps> = ({
             </div>
           </div>
 
-          {/* Coins (Top Right) */}
-          <div className="absolute top-4 right-4 z-10 bg-amber-950/85 backdrop-blur-md border border-amber-500/40 px-4 py-2 rounded-2xl shadow-xl flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-amber-400" />
-            <div>
-              <div className="text-xs text-amber-300 font-bold">Slalom Coins:</div>
-              <div className="text-lg font-black font-mono text-amber-400">+{coinsEarned}</div>
+          {/* Combo Counter (Top Center) */}
+          {comboCount >= 2 && (
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20">
+              <div className={`px-5 py-2 rounded-2xl font-black text-lg shadow-xl animate-pulse ${
+                comboCount >= 4 ? 'bg-amber-500 text-slate-950' : comboCount >= 3 ? 'bg-emerald-500 text-slate-950' : 'bg-sky-500 text-white'
+              }`}>
+                {comboCount}x GATE COMBO! ({Math.min(4, comboCount)}x coins)
+              </div>
+            </div>
+          )}
+
+          {/* Wipeout Overlay */}
+          {skiState === 'wipeout' && (
+            <div className="absolute inset-0 z-30 bg-red-950/50 flex items-center justify-center">
+              <div className="text-5xl font-black text-red-400 animate-bounce">⛔ WIPEOUT!</div>
+            </div>
+          )}
+
+          {/* Finished Overlay */}
+          {skiState === 'finished' && (
+            <div className="absolute inset-0 z-30 bg-sky-950/80 backdrop-blur-sm flex flex-col items-center justify-center gap-4">
+              <div className="text-5xl font-black text-sky-400">🏁 FINISH!</div>
+              <div className="text-sm text-sky-200">You completed the {FINISH_DISTANCE}m slalom course!</div>
+              <div className="text-lg font-bold text-amber-400">Gates: {gatesCleared} • Coins: +{coinsEarned}</div>
+              <div className="text-sm text-slate-300">Time: {((performance.now() - startTimeRef.current) / 1000).toFixed(1)}s</div>
+              <button onClick={handleExit} className="px-6 py-2 bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold rounded-xl">
+                <Trophy className="w-4 h-4 inline mr-1" /> Bank Coins & Exit
+              </button>
+            </div>
+          )}
+
+          {/* Coins & Record (Top Right) */}
+          <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
+            {highScore > 0 && (
+              <div className="bg-slate-900/85 backdrop-blur-md border border-slate-700 px-3.5 py-2 rounded-2xl shadow-xl text-xs font-mono text-slate-300">
+                Record: <strong className="text-emerald-400">{highScore} Gates</strong>
+              </div>
+            )}
+            <div className="bg-amber-950/85 backdrop-blur-md border border-amber-500/40 px-4 py-2 rounded-2xl shadow-xl flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-amber-400" />
+              <div>
+                <div className="text-xs text-amber-300 font-bold">Slalom Coins:</div>
+                <div className="text-lg font-black font-mono text-amber-400">+{coinsEarned}</div>
+              </div>
             </div>
           </div>
 
           {/* On-screen Controls */}
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2">
-            <button
-              onMouseDown={() => (steerInputRef.current = -1)}
-              onMouseUp={() => (steerInputRef.current = 0)}
-              onTouchStart={() => (steerInputRef.current = -1)}
-              onTouchEnd={() => (steerInputRef.current = 0)}
-              className="px-4 py-2.5 bg-slate-900/90 border border-slate-700 text-slate-200 rounded-2xl text-xs font-bold active:scale-95"
-            >
-              ◀ Carve Left (A)
-            </button>
+          {skiState === 'skiing' && (
+            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2">
+              <button
+                onMouseDown={() => (steerInputRef.current = -1)}
+                onMouseUp={() => (steerInputRef.current = 0)}
+                onTouchStart={() => (steerInputRef.current = -1)}
+                onTouchEnd={() => (steerInputRef.current = 0)}
+                className="px-4 py-2.5 bg-slate-900/90 border border-slate-700 text-slate-200 rounded-2xl text-xs font-bold active:scale-95"
+              >
+                ◀ Carve Left (A)
+              </button>
 
-            <button
-              onMouseDown={() => (steerInputRef.current = 1)}
-              onMouseUp={() => (steerInputRef.current = 0)}
-              onTouchStart={() => (steerInputRef.current = 1)}
-              onTouchEnd={() => (steerInputRef.current = 0)}
-              className="px-4 py-2.5 bg-slate-900/90 border border-slate-700 text-slate-200 rounded-2xl text-xs font-bold active:scale-95"
-            >
-              Carve Right (D) ▶
-            </button>
-          </div>
+              <button
+                onMouseDown={() => (steerInputRef.current = 1)}
+                onMouseUp={() => (steerInputRef.current = 0)}
+                onTouchStart={() => (steerInputRef.current = 1)}
+                onTouchEnd={() => (steerInputRef.current = 0)}
+                className="px-4 py-2.5 bg-slate-900/90 border border-slate-700 text-slate-200 rounded-2xl text-xs font-bold active:scale-95"
+              >
+                Carve Right (D) ▶
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Footer */}

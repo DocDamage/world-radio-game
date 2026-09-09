@@ -10,6 +10,8 @@ interface SurfingGameModalProps {
   activeStation: RadioStation | null;
   waterwayName: string | null;
   onAddCoins?: (amount: number) => void;
+  highScore?: number;
+  onUpdateHighScore?: (score: number) => void;
 }
 
 interface SprayParticle {
@@ -35,7 +37,9 @@ export const SurfingGameModal: React.FC<SurfingGameModalProps> = ({
   onClose,
   activeStation,
   waterwayName,
-  onAddCoins
+  onAddCoins,
+  highScore = 0,
+  onUpdateHighScore
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -46,6 +50,12 @@ export const SurfingGameModal: React.FC<SurfingGameModalProps> = ({
   const [multiplier, setMultiplier] = useState(1);
   const [coinsEarned, setCoinsEarned] = useState(0);
   const [styleRating, setStyleRating] = useState('Grommet');
+  const [waveIntensity, setWaveIntensity] = useState(1.0);
+  const [activeTrick, setActiveTrick] = useState<{ name: string; pts: number } | null>(null);
+  const [longestTubeTime, setLongestTubeTime] = useState<number>(() => {
+    const saved = localStorage.getItem('world_radio_surf_longest_tube');
+    return saved ? parseFloat(saved) : 0;
+  });
 
   // References for the 60fps loop
   const loopRef = useRef<number | null>(null);
@@ -75,6 +85,9 @@ export const SurfingGameModal: React.FC<SurfingGameModalProps> = ({
   const collectiblesRef = useRef<WaveCollectible[]>([]);
   const waveOffsetRef = useRef(0);
   const statsRef = useRef({ score: 0, tubeTime: 0, multiplier: 1, runTime: 0 });
+  const trickCooldownRef = useRef(0);
+  const floaterTimeRef = useRef(0);
+  const trickTimerRef = useRef(0);
 
   // Reset Surfer
   const resetRun = useCallback(() => {
@@ -97,6 +110,11 @@ export const SurfingGameModal: React.FC<SurfingGameModalProps> = ({
     setTubeTimeSec(0);
     setMultiplier(1);
     setCoinsEarned(0);
+    setActiveTrick(null);
+    setWaveIntensity(1.0);
+    trickCooldownRef.current = 0;
+    floaterTimeRef.current = 0;
+    trickTimerRef.current = 0;
 
     // Generate collectibles across the wave face
     const items: WaveCollectible[] = [];
@@ -161,11 +179,26 @@ export const SurfingGameModal: React.FC<SurfingGameModalProps> = ({
 
       const width = canvas.width;
       const height = canvas.height;
-      waveOffsetRef.current += 160 * dt;
 
       const surfer = surferRef.current;
       const keys = keysRef.current;
       const stats = statsRef.current;
+
+      // Progressive wave intensity over time
+      const intensity = Math.min(2.2, 1.0 + stats.runTime * 0.035);
+      waveOffsetRef.current += (160 * intensity) * dt;
+      setWaveIntensity(Math.round(intensity * 10) / 10);
+
+      // Trick display timer
+      if (trickTimerRef.current > 0) {
+        trickTimerRef.current -= dt;
+        if (trickTimerRef.current <= 0) {
+          setActiveTrick(null);
+        }
+      }
+      if (trickCooldownRef.current > 0) {
+        trickCooldownRef.current -= dt;
+      }
 
       if (gameState === 'surfing') {
         stats.runTime += dt;
@@ -178,10 +211,15 @@ export const SurfingGameModal: React.FC<SurfingGameModalProps> = ({
 
         if (isTube) {
           stats.tubeTime += dt;
-          setTubeTimeSec(Math.round(stats.tubeTime * 10) / 10);
+          const currTube = Math.round(stats.tubeTime * 10) / 10;
+          setTubeTimeSec(currTube);
+          if (currTube > longestTubeTime) {
+            setLongestTubeTime(currTube);
+            localStorage.setItem('world_radio_surf_longest_tube', currTube.toString());
+          }
           stats.multiplier = Math.min(5, 1 + Math.floor(stats.tubeTime * 1.5));
           setMultiplier(stats.multiplier);
-          stats.score += Math.round(180 * dt * stats.multiplier);
+          stats.score += Math.round(180 * dt * stats.multiplier * intensity);
         }
 
         // Steer inputs
@@ -207,13 +245,73 @@ export const SurfingGameModal: React.FC<SurfingGameModalProps> = ({
           surfer.speed = Math.min(26, surfer.speed + 6 * dt);
         }
 
-        // Aerial off the lip
+        // ----------------------------------------------------
+        // NAMED TRICK RECOGNITION SYSTEM
+        // ----------------------------------------------------
+        // 1. Cutback: sharp directional reversal back to pocket from the open shoulder
+        if (keys.left && surfer.x > 320 && surfer.carveHeat > 0.4 && trickCooldownRef.current <= 0) {
+          const pts = 180 * stats.multiplier;
+          stats.score += pts;
+          setActiveTrick({ name: 'RADICAL CUTBACK', pts });
+          trickTimerRef.current = 1.4;
+          trickCooldownRef.current = 1.3;
+          soundEffects.playRadarPing(900, 0.1);
+        }
+
+        // 2. Lip Floater: skimming horizontally on top of breaking lip
+        if (keys.up && surfer.y <= 160 && surfer.speed > 13) {
+          floaterTimeRef.current += dt;
+          if (floaterTimeRef.current > 0.35 && trickCooldownRef.current <= 0) {
+            const pts = 250 * stats.multiplier;
+            stats.score += pts;
+            setActiveTrick({ name: 'LIP FLOATER', pts });
+            trickTimerRef.current = 1.5;
+            trickCooldownRef.current = 1.8;
+            floaterTimeRef.current = 0;
+            soundEffects.playRadarPing(1100, 0.1);
+          }
+        } else {
+          floaterTimeRef.current = Math.max(0, floaterTimeRef.current - dt * 2);
+        }
+
+        // 3. Power Snap off the lip
+        if (keys.snap && surfer.y < 210 && !surfer.airborne && surfer.speed > 13 && trickCooldownRef.current <= 0) {
+          const pts = 320 * stats.multiplier;
+          stats.score += pts;
+          setActiveTrick({ name: 'POWER SNAP', pts });
+          trickTimerRef.current = 1.4;
+          trickCooldownRef.current = 1.4;
+          for (let i = 0; i < 16; i++) {
+            particlesRef.current.push({
+              x: surfer.x,
+              y: surfer.y,
+              vx: (Math.random() - 0.5) * 220,
+              vy: -Math.random() * 140 - 40,
+              radius: Math.random() * 4 + 2,
+              alpha: 1,
+              color: 'rgba(255,255,255,0.95)'
+            });
+          }
+          soundEffects.playStaticBurst(0.08, 0.2);
+        }
+
+        // 4. Aerial off the lip
         if (keys.snap && surfer.y < 160 && !surfer.airborne && surfer.speed > 14) {
           surfer.airborne = true;
           surfer.airTime = 0.65;
           surfer.vy = -180;
           stats.score += 250 * stats.multiplier;
           soundEffects.playTriumphChime(0.2);
+        }
+
+        // 5. Airborne Spin: Aerial 360 Air Reverse
+        if (surfer.airborne && surfer.airTime > 0.1 && (keys.left || keys.right) && trickCooldownRef.current <= 0) {
+          const pts = 500 * stats.multiplier;
+          stats.score += pts;
+          setActiveTrick({ name: 'AERIAL 360', pts });
+          trickTimerRef.current = 1.6;
+          trickCooldownRef.current = 2.0;
+          soundEffects.playTriumphChime(0.25);
         }
 
         // Airborne physics
@@ -238,7 +336,7 @@ export const SurfingGameModal: React.FC<SurfingGameModalProps> = ({
         }
 
         // Natural wave pull: wave pushes rider to the right towards shoulder
-        surfer.vx += 35 * dt;
+        surfer.vx += 35 * dt * intensity;
         // Gravity down the wave face
         surfer.vy += 40 * dt;
 
@@ -263,6 +361,9 @@ export const SurfingGameModal: React.FC<SurfingGameModalProps> = ({
           const earned = Math.max(25, Math.round(finalScore / 40));
           setCoinsEarned(earned);
           if (onAddCoins) onAddCoins(earned);
+          if (onUpdateHighScore && finalScore > highScore) {
+            onUpdateHighScore(finalScore);
+          }
 
           let rating = 'Grommet';
           if (finalScore > 2500) rating = 'World Champion Pro';
@@ -538,7 +639,7 @@ export const SurfingGameModal: React.FC<SurfingGameModalProps> = ({
     return () => {
       if (loopRef.current) cancelAnimationFrame(loopRef.current);
     };
-  }, [isOpen, gameState, onAddCoins]);
+  }, [isOpen, gameState, onAddCoins, longestTubeTime, highScore, onUpdateHighScore]);
 
   if (!isOpen) return null;
 
@@ -567,6 +668,12 @@ export const SurfingGameModal: React.FC<SurfingGameModalProps> = ({
           </div>
 
           <div className="flex items-center gap-4">
+            {highScore > 0 && (
+              <div className="text-right hidden sm:block">
+                <div className="text-[10px] uppercase font-mono text-slate-400">Record</div>
+                <div className="font-mono font-bold text-xs text-amber-400">{highScore.toLocaleString()}</div>
+              </div>
+            )}
             <div className="text-right">
               <div className="text-[10px] uppercase font-mono text-slate-400">Score</div>
               <div className="font-mono font-bold text-lg text-sky-300">{score.toLocaleString()}</div>
@@ -589,18 +696,30 @@ export const SurfingGameModal: React.FC<SurfingGameModalProps> = ({
             className="w-full h-auto max-h-[440px] block"
           />
 
+          {/* Floating Trick Banner */}
+          {activeTrick && (
+            <div className="absolute top-14 left-1/2 -translate-x-1/2 z-20 bg-gradient-to-r from-amber-400 to-rose-400 text-slate-950 font-black px-4 py-1.5 rounded-full text-xs font-mono shadow-2xl animate-bounce flex items-center gap-1.5 border border-white/60">
+              <Zap className="w-3.5 h-3.5 fill-slate-950" />
+              {activeTrick.name} +{activeTrick.pts} PTS!
+            </div>
+          )}
+
           {/* In-Game HUD Overlays */}
           {gameState === 'surfing' && (
             <div className="absolute top-3 left-4 right-4 flex items-center justify-between pointer-events-none">
               <div className="flex items-center gap-2 bg-slate-900/85 backdrop-blur-md px-3 py-1.5 rounded-xl border border-sky-500/30 text-xs font-mono text-slate-200">
                 <Zap className="w-4 h-4 text-amber-400" />
-                <span>Tube Time: <strong className="text-amber-300">{tubeTimeSec}s</strong></span>
+                <span>Tube: <strong className="text-amber-300">{tubeTimeSec}s</strong></span>
                 <span className="text-slate-500">|</span>
-                <span>Multiplier: <strong className="text-sky-400">{multiplier}x</strong></span>
+                <span>Best: <strong className="text-teal-300">{longestTubeTime}s</strong></span>
+                <span className="text-slate-500">|</span>
+                <span>Mult: <strong className="text-sky-400">{multiplier}x</strong></span>
+                <span className="text-slate-500">|</span>
+                <span className="text-cyan-300">{(4.5 * waveIntensity).toFixed(1)}ft Swell</span>
               </div>
 
               <div className="text-xs font-mono bg-slate-900/85 backdrop-blur-md px-3 py-1.5 rounded-xl border border-sky-500/30 text-slate-300">
-                A/D Carve • W/S Face • Space Snap Off Lip
+                A/D Carve • W/S Face • Space Snap / Air
               </div>
             </div>
           )}
@@ -613,14 +732,14 @@ export const SurfingGameModal: React.FC<SurfingGameModalProps> = ({
               </div>
               <h2 className="text-xl font-bold text-slate-100 mb-1">Paddle Into The Swell!</h2>
               <p className="text-xs text-slate-400 max-w-md mb-5 leading-relaxed">
-                Catch the wave crest, drop down the face, carve radical bottom turns, and tuck into the deep green tube for multiplier bonuses!
+                Catch the wave crest, drop down the face, carve radical bottom turns, execute Cutbacks and Lip Floaters, and tuck into the deep green tube!
               </p>
 
               <div className="grid grid-cols-2 gap-3 max-w-sm w-full mb-6 text-left text-xs font-mono bg-slate-900/90 p-3 rounded-2xl border border-sky-500/20 text-slate-300">
-                <div>• <strong className="text-sky-300">A / D</strong>: Carve left/right</div>
-                <div>• <strong className="text-sky-300">W / S</strong>: Climb / Drop face</div>
+                <div>• <strong className="text-sky-300">A / D</strong>: Carve / Cutback</div>
+                <div>• <strong className="text-sky-300">W / S</strong>: Lip Floater / Drop</div>
                 <div>• <strong className="text-amber-300">Tube</strong>: Tuck into barrel</div>
-                <div>• <strong className="text-sky-300">Space</strong>: Snap off lip</div>
+                <div>• <strong className="text-sky-300">Space</strong>: Snap / Aerial 360</div>
               </div>
 
               <button
@@ -655,7 +774,7 @@ export const SurfingGameModal: React.FC<SurfingGameModalProps> = ({
               <h2 className="text-2xl font-bold text-slate-100 mb-0.5">Wave Ridden To The Shoulder!</h2>
               <div className="text-sm font-bold text-sky-300 mb-3">{styleRating}</div>
 
-              <div className="grid grid-cols-2 gap-3 max-w-xs w-full mb-5 text-center font-mono text-xs bg-slate-900/90 p-3 rounded-2xl border border-sky-500/30 text-slate-200">
+              <div className="grid grid-cols-3 gap-3 max-w-sm w-full mb-5 text-center font-mono text-xs bg-slate-900/90 p-3 rounded-2xl border border-sky-500/30 text-slate-200">
                 <div>
                   <div className="text-slate-400 text-[10px]">TOTAL SCORE</div>
                   <div className="text-base font-bold text-yellow-400">{score.toLocaleString()}</div>
@@ -663,6 +782,10 @@ export const SurfingGameModal: React.FC<SurfingGameModalProps> = ({
                 <div>
                   <div className="text-slate-400 text-[10px]">TUBE TIME</div>
                   <div className="text-base font-bold text-teal-300">{tubeTimeSec}s</div>
+                </div>
+                <div>
+                  <div className="text-slate-400 text-[10px]">BEST TUBE</div>
+                  <div className="text-base font-bold text-sky-300">{longestTubeTime}s</div>
                 </div>
               </div>
 

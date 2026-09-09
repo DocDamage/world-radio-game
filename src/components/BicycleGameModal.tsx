@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Bike, Bell, X, Zap, Wind, Trophy, Sparkles } from 'lucide-react';
+import { Bike, Bell, X, Zap, Wind, Trophy, Sparkles, AlertTriangle, RotateCcw } from 'lucide-react';
+import confetti from 'canvas-confetti';
 import { soundEffects } from '../services/audioEffects';
 import { gamepadManager } from '../services/gamepadManager';
 import type { EnvironmentType } from '../types';
@@ -11,7 +12,11 @@ interface BicycleGameModalProps {
   countryName: string;
   biome: EnvironmentType;
   onEarnCoins: (amount: number) => void;
+  highScore?: number;
+  onUpdateHighScore?: (score: number) => void;
 }
+
+type BicycleState = 'riding' | 'crashed' | 'finished';
 
 interface Obstacle {
   x: number; // -1 (far left) to 1 (far right)
@@ -30,11 +35,14 @@ export const BicycleGameModal: React.FC<BicycleGameModalProps> = ({
   cityName,
   countryName,
   biome,
-  onEarnCoins
+  onEarnCoins,
+  highScore = 0,
+  onUpdateHighScore
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // Game state
+  const [gameState, setGameState] = useState<BicycleState>('riding');
   const [speed, setSpeed] = useState<number>(0);
   const [gear, setGear] = useState<number>(3);
   const [distanceMeters, setDistanceMeters] = useState<number>(0);
@@ -43,8 +51,12 @@ export const BicycleGameModal: React.FC<BicycleGameModalProps> = ({
   const [cadenceRpm, setCadenceRpm] = useState<number>(0);
   const [bellActive, setBellActive] = useState<boolean>(false);
   const [nearMissCount, setNearMissCount] = useState<number>(0);
+  const [comboMultiplier, setComboMultiplier] = useState<number>(1);
+  const [isDrafting, setIsDrafting] = useState<boolean>(false);
+  const FINISH_DISTANCE = 2000;
 
   // Internal mutable refs for 60fps game loop
+  const gameStateRef = useRef<BicycleState>('riding');
   const playerXRef = useRef<number>(0); // -0.85 to 0.85
   const speedRef = useRef<number>(0);
   const gearRef = useRef<number>(3);
@@ -59,6 +71,11 @@ export const BicycleGameModal: React.FC<BicycleGameModalProps> = ({
   const steerInputRef = useRef<number>(0);
   const pedalTimerRef = useRef<number>(0);
   const bellRingTimerRef = useRef<number>(0);
+  const comboMultiplierRef = useRef<number>(1);
+  const comboDecayTimerRef = useRef<number>(0);
+  const draftTimerRef = useRef<number>(0);
+  const isDraftingRef = useRef<boolean>(false);
+  const shakeRef = useRef<number>(0);
 
   // Sound and bell
   const ringBell = useCallback(() => {
@@ -79,6 +96,7 @@ export const BicycleGameModal: React.FC<BicycleGameModalProps> = ({
 
   // Pedal push action
   const handlePedalPush = useCallback(() => {
+    if (gameStateRef.current !== 'riding') return;
     // Gear determines acceleration vs top speed
     const maxSpeedByGear = [16, 24, 34, 42, 52][gearRef.current - 1];
     const accel = [5.5, 4.8, 4.0, 3.2, 2.5][gearRef.current - 1];
@@ -179,76 +197,151 @@ export const BicycleGameModal: React.FC<BicycleGameModalProps> = ({
       const dt = Math.min((currentTime - lastTimeRef.current) / 1000, 0.1);
       lastTimeRef.current = currentTime;
 
-      // Natural drag / friction
-      speedRef.current = Math.max(0, speedRef.current - 1.8 * dt);
+      if (gameStateRef.current === 'riding') {
+        // Natural drag / friction (reduced if drafting)
+        const dragRate = isDraftingRef.current ? 0.6 : 1.8;
+        speedRef.current = Math.max(0, speedRef.current - dragRate * dt);
 
-      // Steering
-      playerXRef.current += steerInputRef.current * 1.35 * dt;
-      playerXRef.current = Math.max(-0.85, Math.min(0.85, playerXRef.current));
+        // Steering
+        playerXRef.current += steerInputRef.current * 1.35 * dt;
+        playerXRef.current = Math.max(-0.85, Math.min(0.85, playerXRef.current));
 
-      // Advance distance
-      const distanceStep = (speedRef.current / 3.6) * dt * 10;
-      distanceRef.current += distanceStep;
+        // Advance distance
+        const distanceStep = (speedRef.current / 3.6) * dt * 10;
+        distanceRef.current += distanceStep;
 
-      // Road curve swaying
-      if (Math.random() < 0.02) {
-        targetCurveRef.current = (Math.random() - 0.5) * 1.2;
-      }
-      curveRef.current += (targetCurveRef.current - curveRef.current) * dt * 1.5;
+        // Combo decay timer
+        if (comboDecayTimerRef.current > 0) {
+          comboDecayTimerRef.current -= dt;
+          if (comboDecayTimerRef.current <= 0) {
+            comboMultiplierRef.current = 1;
+            setComboMultiplier(1);
+          }
+        }
 
-      // Spawn new obstacles as we advance
-      nextSpawnDistance += distanceStep;
-      if (nextSpawnDistance > 90) {
-        nextSpawnDistance = 0;
-        spawnObstacle(950 + Math.random() * 200);
-      }
-
-      // Update obstacles
-      for (let i = obstaclesRef.current.length - 1; i >= 0; i--) {
-        const obs = obstaclesRef.current[i];
-        // Move towards player
-        obs.z -= (speedRef.current * 14 - obs.speed * 8) * dt;
-
-        // Collision or Near Miss check near player (z between -15 and 35)
-        if (obs.z > -20 && obs.z < 40) {
-          const dx = Math.abs(obs.x - playerXRef.current);
-          if (obs.type === 'coin') {
-            if (dx < 0.28) {
-              // Collected Coin!
-              coinsRef.current += 1;
-              soundEffects.playCoinSound();
-              gamepadManager.vibrate(50, 0.4, 0.2);
-              obstaclesRef.current.splice(i, 1);
-              continue;
-            }
-          } else {
-            // Hazard
+        // Check Drafting Slipstream behind cars/taxis
+        let vehicleAhead = false;
+        for (const obs of obstaclesRef.current) {
+          if ((obs.type === 'car' || obs.type === 'taxi') && obs.z > 30 && obs.z < 160) {
+            const dx = Math.abs(obs.x - playerXRef.current);
             if (dx < 0.22) {
-              // Hit hazard!
-              speedRef.current = Math.max(4, speedRef.current * 0.4);
-              soundEffects.playStaticBurst(0.1, 0.2);
-              gamepadManager.vibrate(180, 0.8, 0.6);
-              obs.z = -50; // pass player
-            } else if (dx < 0.38 && !obs.scared) {
-              // Near miss bonus!
-              obs.scared = true;
-              setNearMissCount(n => n + 1);
+              vehicleAhead = true;
+              break;
             }
           }
         }
 
-        // Remove passed obstacles
-        if (obs.z < -40) {
-          obstaclesRef.current.splice(i, 1);
+        if (vehicleAhead) {
+          draftTimerRef.current += dt;
+          if (draftTimerRef.current > 0.6) {
+            if (!isDraftingRef.current) {
+              soundEffects.playRadarPing(950, 0.08);
+            }
+            isDraftingRef.current = true;
+            setIsDrafting(true);
+            speedRef.current = Math.min(58, speedRef.current + 12 * dt);
+          }
+        } else {
+          draftTimerRef.current = Math.max(0, draftTimerRef.current - dt * 2);
+          if (draftTimerRef.current <= 0 && isDraftingRef.current) {
+            isDraftingRef.current = false;
+            setIsDrafting(false);
+          }
         }
-      }
 
-      // Sync state to React for HUD
-      setSpeed(Math.round(speedRef.current));
-      setDistanceMeters(Math.round(distanceRef.current));
-      setCoinsCollected(coinsRef.current);
-      setCalories(Math.round(caloriesRef.current));
-      setCadenceRpm(Math.round(speedRef.current * 2.8));
+        // Check Finish Line
+        if (distanceRef.current >= FINISH_DISTANCE) {
+          gameStateRef.current = 'finished';
+          setGameState('finished');
+          const bonusCoins = 50 + Math.round(nearMissCount * 3);
+          coinsRef.current += bonusCoins;
+          setCoinsCollected(coinsRef.current);
+          if (onUpdateHighScore) {
+            onUpdateHighScore(Math.round(distanceRef.current));
+          }
+          confetti({ particleCount: 90, spread: 70, origin: { y: 0.6 } });
+          soundEffects.playTriumphChime(0.5);
+        }
+
+        // Road curve swaying
+        if (Math.random() < 0.02) {
+          targetCurveRef.current = (Math.random() - 0.5) * 1.2;
+        }
+        curveRef.current += (targetCurveRef.current - curveRef.current) * dt * 1.5;
+
+        // Spawn new obstacles as we advance
+        nextSpawnDistance += distanceStep;
+        if (nextSpawnDistance > 90) {
+          nextSpawnDistance = 0;
+          spawnObstacle(950 + Math.random() * 200);
+        }
+
+        // Update obstacles
+        for (let i = obstaclesRef.current.length - 1; i >= 0; i--) {
+          const obs = obstaclesRef.current[i];
+          // Move towards player
+          obs.z -= (speedRef.current * 14 - obs.speed * 8) * dt;
+
+          // Collision or Near Miss check near player (z between -15 and 35)
+          if (obs.z > -20 && obs.z < 40) {
+            const dx = Math.abs(obs.x - playerXRef.current);
+            if (obs.type === 'coin') {
+              if (dx < 0.28) {
+                // Collected Coin!
+                coinsRef.current += 1 * comboMultiplierRef.current;
+                soundEffects.playCoinSound();
+                gamepadManager.vibrate(50, 0.4, 0.2);
+                obstaclesRef.current.splice(i, 1);
+                continue;
+              }
+            } else {
+              // Hazard
+              if (dx < 0.22) {
+                if (speedRef.current > 30) {
+                  // High-speed Wipeout Crash!
+                  gameStateRef.current = 'crashed';
+                  setGameState('crashed');
+                  shakeRef.current = 1.0;
+                  soundEffects.playStaticBurst(0.4, 0.5);
+                  gamepadManager.vibrate(350, 1.0, 0.8);
+                  if (onUpdateHighScore && distanceRef.current > highScore) {
+                    onUpdateHighScore(Math.round(distanceRef.current));
+                  }
+                  break;
+                } else {
+                  // Minor low-speed bump
+                  speedRef.current = Math.max(4, speedRef.current * 0.4);
+                  shakeRef.current = 0.3;
+                  soundEffects.playStaticBurst(0.1, 0.2);
+                  gamepadManager.vibrate(180, 0.8, 0.6);
+                  obs.z = -50; // pass player
+                }
+              } else if (dx < 0.38 && !obs.scared) {
+                // Near miss combo chain!
+                obs.scared = true;
+                setNearMissCount(n => n + 1);
+                comboMultiplierRef.current = Math.min(4, comboMultiplierRef.current + 1);
+                comboDecayTimerRef.current = 3.0;
+                setComboMultiplier(comboMultiplierRef.current);
+                coinsRef.current += comboMultiplierRef.current;
+                soundEffects.playRadarPing(600 + comboMultiplierRef.current * 140, 0.1);
+              }
+            }
+          }
+
+          // Remove passed obstacles
+          if (obs.z < -40) {
+            obstaclesRef.current.splice(i, 1);
+          }
+        }
+
+        // Sync state to React for HUD
+        setSpeed(Math.round(speedRef.current));
+        setDistanceMeters(Math.round(distanceRef.current));
+        setCoinsCollected(coinsRef.current);
+        setCalories(Math.round(caloriesRef.current));
+        setCadenceRpm(Math.round(speedRef.current * 2.8));
+      }
 
       // ----------------------------------------------------
       // RENDER CANVAS
@@ -256,6 +349,15 @@ export const BicycleGameModal: React.FC<BicycleGameModalProps> = ({
       const W = canvas.width;
       const H = canvas.height;
       ctx.clearRect(0, 0, W, H);
+
+      ctx.save();
+      // Apply screen shake
+      if (shakeRef.current > 0) {
+        shakeRef.current = Math.max(0, shakeRef.current - dt * 2.5);
+        const sx = (Math.random() - 0.5) * shakeRef.current * 18;
+        const sy = (Math.random() - 0.5) * shakeRef.current * 18;
+        ctx.translate(sx, sy);
+      }
 
       // 1. Sky & Backdrop based on Biome
       renderSkyAndHorizon(ctx, W, H, biome, curveRef.current);
@@ -280,6 +382,8 @@ export const BicycleGameModal: React.FC<BicycleGameModalProps> = ({
         currentTime
       );
 
+      ctx.restore();
+
       animationFrameRef.current = requestAnimationFrame(gameLoop);
     };
 
@@ -288,12 +392,37 @@ export const BicycleGameModal: React.FC<BicycleGameModalProps> = ({
     return () => {
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
     };
-  }, [isOpen, biome]);
+  }, [isOpen, biome, highScore, onUpdateHighScore]);
+
+  // Restart Run
+  const handleRestart = () => {
+    speedRef.current = 14;
+    obstaclesRef.current = [];
+    distanceRef.current = 0;
+    coinsRef.current = 0;
+    playerXRef.current = 0;
+    shakeRef.current = 0;
+    comboMultiplierRef.current = 1;
+    comboDecayTimerRef.current = 0;
+    draftTimerRef.current = 0;
+    isDraftingRef.current = false;
+    gameStateRef.current = 'riding';
+    setGameState('riding');
+    setSpeed(14);
+    setDistanceMeters(0);
+    setCoinsCollected(0);
+    setNearMissCount(0);
+    setComboMultiplier(1);
+    setIsDrafting(false);
+  };
 
   // Award coins on modal close
   const handleExit = () => {
     if (coinsCollected > 0) {
       onEarnCoins(coinsCollected);
+    }
+    if (onUpdateHighScore && distanceMeters > highScore) {
+      onUpdateHighScore(distanceMeters);
     }
     onClose();
   };
@@ -376,8 +505,15 @@ export const BicycleGameModal: React.FC<BicycleGameModalProps> = ({
             </div>
           </div>
 
-          {/* Floating Score & Coins */}
+          {/* Floating Score, Combo & Coins */}
           <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
+            {comboMultiplier > 1 && (
+              <div className="bg-gradient-to-r from-amber-500 to-rose-500 text-slate-950 font-black px-3 py-1.5 rounded-2xl text-xs font-mono shadow-xl animate-pulse flex items-center gap-1 border border-amber-300">
+                <Sparkles className="w-3.5 h-3.5 fill-slate-950" />
+                {comboMultiplier}x COMBO!
+              </div>
+            )}
+
             <div className="bg-amber-950/80 backdrop-blur-md border border-amber-500/40 px-3.5 py-2 rounded-2xl shadow-xl flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-amber-400" />
               <div>
@@ -386,54 +522,157 @@ export const BicycleGameModal: React.FC<BicycleGameModalProps> = ({
               </div>
             </div>
 
-            {nearMissCount > 0 && (
-              <div className="bg-purple-950/80 backdrop-blur-md border border-purple-500/40 px-3 py-2 rounded-2xl text-xs font-mono text-purple-300">
-                Near Misses: <span className="font-bold text-white">{nearMissCount}</span>
+            {highScore > 0 && (
+              <div className="bg-slate-900/80 backdrop-blur-md border border-slate-700 px-3 py-2 rounded-2xl text-xs font-mono text-slate-300 hidden sm:block">
+                Best: <span className="font-bold text-lime-400">{highScore}m</span>
               </div>
             )}
           </div>
 
-          {/* Quick Arcade Touch / On-screen Controls */}
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2">
-            <button
-              onMouseDown={() => (steerInputRef.current = -1)}
-              onMouseUp={() => (steerInputRef.current = 0)}
-              onTouchStart={() => (steerInputRef.current = -1)}
-              onTouchEnd={() => (steerInputRef.current = 0)}
-              className="px-4 py-2.5 bg-slate-900/90 hover:bg-slate-800 border border-slate-700 text-slate-200 rounded-2xl text-xs font-bold active:scale-95 shadow-lg"
-            >
-              ◀ Steer Left (A)
-            </button>
+          {/* Slipstream Drafting Banner */}
+          {isDrafting && (
+            <div className="absolute top-16 left-1/2 -translate-x-1/2 z-10 bg-sky-500/90 text-slate-950 px-4 py-1 rounded-full font-black text-xs uppercase tracking-wider animate-bounce shadow-lg flex items-center gap-1.5 border border-sky-300">
+              <Wind className="w-3.5 h-3.5" /> Drafting Slipstream +Speed!
+            </div>
+          )}
 
-            <button
-              onClick={handlePedalPush}
-              className="px-6 py-3 bg-gradient-to-r from-lime-400 to-emerald-400 hover:from-lime-300 hover:to-emerald-300 text-slate-950 font-black text-sm rounded-2xl shadow-xl shadow-lime-400/20 active:scale-90 flex items-center gap-1.5"
-            >
-              <Zap className="w-4 h-4 fill-slate-950" /> PEDAL! (Tap W / Space)
-            </button>
-
-            <button
-              onMouseDown={() => (steerInputRef.current = 1)}
-              onMouseUp={() => (steerInputRef.current = 0)}
-              onTouchStart={() => (steerInputRef.current = 1)}
-              onTouchEnd={() => (steerInputRef.current = 0)}
-              className="px-4 py-2.5 bg-slate-900/90 hover:bg-slate-800 border border-slate-700 text-slate-200 rounded-2xl text-xs font-bold active:scale-95 shadow-lg"
-            >
-              Steer Right (D) ▶
-            </button>
-
-            <button
-              onClick={ringBell}
-              className={`p-3 rounded-2xl border text-xs font-bold transition flex items-center justify-center active:scale-90 shadow-lg ${
-                bellActive
-                  ? 'bg-amber-400 text-slate-950 border-amber-300 scale-105'
-                  : 'bg-slate-900/90 hover:bg-slate-800 text-amber-400 border-amber-500/30'
-              }`}
-              title="Ring Bell (B)"
-            >
-              <Bell className="w-4 h-4" />
-            </button>
+          {/* Course Progress Bar */}
+          <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-10 w-64 bg-slate-900/80 backdrop-blur-sm border border-slate-700/60 rounded-full h-3 overflow-hidden">
+            <div
+              className="bg-gradient-to-r from-lime-400 to-emerald-400 h-full transition-all duration-200"
+              style={{ width: `${Math.min(100, (distanceMeters / FINISH_DISTANCE) * 100)}%` }}
+            />
           </div>
+
+          {/* Quick Arcade Touch / On-screen Controls */}
+          {gameState === 'riding' && (
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2">
+              <button
+                onMouseDown={() => (steerInputRef.current = -1)}
+                onMouseUp={() => (steerInputRef.current = 0)}
+                onTouchStart={() => (steerInputRef.current = -1)}
+                onTouchEnd={() => (steerInputRef.current = 0)}
+                className="px-4 py-2.5 bg-slate-900/90 hover:bg-slate-800 border border-slate-700 text-slate-200 rounded-2xl text-xs font-bold active:scale-95 shadow-lg"
+              >
+                ◀ Steer Left (A)
+              </button>
+
+              <button
+                onClick={handlePedalPush}
+                className="px-6 py-3 bg-gradient-to-r from-lime-400 to-emerald-400 hover:from-lime-300 hover:to-emerald-300 text-slate-950 font-black text-sm rounded-2xl shadow-xl shadow-lime-400/20 active:scale-90 flex items-center gap-1.5"
+              >
+                <Zap className="w-4 h-4 fill-slate-950" /> PEDAL! (Tap W / Space)
+              </button>
+
+              <button
+                onMouseDown={() => (steerInputRef.current = 1)}
+                onMouseUp={() => (steerInputRef.current = 0)}
+                onTouchStart={() => (steerInputRef.current = 1)}
+                onTouchEnd={() => (steerInputRef.current = 0)}
+                className="px-4 py-2.5 bg-slate-900/90 hover:bg-slate-800 border border-slate-700 text-slate-200 rounded-2xl text-xs font-bold active:scale-95 shadow-lg"
+              >
+                Steer Right (D) ▶
+              </button>
+
+              <button
+                onClick={ringBell}
+                className={`p-3 rounded-2xl border text-xs font-bold transition flex items-center justify-center active:scale-90 shadow-lg ${
+                  bellActive
+                    ? 'bg-amber-400 text-slate-950 border-amber-300 scale-105'
+                    : 'bg-slate-900/90 hover:bg-slate-800 text-amber-400 border-amber-500/30'
+                }`}
+                title="Ring Bell (B)"
+              >
+                <Bell className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          {/* Crashed Game Over Overlay */}
+          {gameState === 'crashed' && (
+            <div className="absolute inset-0 bg-slate-950/85 backdrop-blur-md z-20 flex flex-col items-center justify-center p-6 text-center animate-fade-in">
+              <div className="p-3 bg-rose-500/20 border border-rose-500/40 rounded-full mb-3 text-rose-400">
+                <AlertTriangle className="w-10 h-10 animate-bounce" />
+              </div>
+              <h2 className="text-2xl font-black text-rose-400 mb-1 tracking-wide uppercase">
+                High-Speed Wipeout!
+              </h2>
+              <p className="text-xs text-slate-300 max-w-sm mb-4">
+                You collided with street traffic while speeding over 30 km/h. Dust yourself off and hop back in the saddle!
+              </p>
+              <div className="flex items-center gap-6 bg-slate-900/90 border border-slate-800 px-6 py-3 rounded-2xl text-xs font-mono mb-5">
+                <div>
+                  <div className="text-slate-400 text-[10px]">DISTANCE</div>
+                  <div className="text-base font-bold text-white">{distanceMeters} m</div>
+                </div>
+                <div className="border-l border-slate-800 pl-4">
+                  <div className="text-slate-400 text-[10px]">NEAR MISSES</div>
+                  <div className="text-base font-bold text-purple-400">{nearMissCount}</div>
+                </div>
+                <div className="border-l border-slate-800 pl-4">
+                  <div className="text-slate-400 text-[10px]">COINS SAVED</div>
+                  <div className="text-base font-bold text-amber-400">+{coinsCollected}</div>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={handleRestart}
+                  className="px-5 py-2.5 bg-lime-400 hover:bg-lime-300 text-slate-950 font-bold text-xs rounded-xl shadow-lg transition flex items-center gap-2"
+                >
+                  <RotateCcw className="w-4 h-4" /> Ride Again
+                </button>
+                <button
+                  onClick={handleExit}
+                  className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl transition"
+                >
+                  Finish & Bank Coins
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Finished Grand Prix Victory Overlay */}
+          {gameState === 'finished' && (
+            <div className="absolute inset-0 bg-slate-950/85 backdrop-blur-md z-20 flex flex-col items-center justify-center p-6 text-center animate-fade-in">
+              <div className="p-3 bg-lime-400/20 border border-lime-400/40 rounded-full mb-3 text-lime-400">
+                <Trophy className="w-10 h-10 animate-bounce" />
+              </div>
+              <h2 className="text-2xl font-black text-lime-400 mb-1 tracking-wide uppercase">
+                Grand Prix Finished!
+              </h2>
+              <p className="text-xs text-slate-300 max-w-sm mb-4">
+                You navigated 2,000 meters of urban traffic through the bustling avenues of {cityName}!
+              </p>
+              <div className="flex items-center gap-6 bg-slate-900/90 border border-slate-800 px-6 py-3 rounded-2xl text-xs font-mono mb-5">
+                <div>
+                  <div className="text-slate-400 text-[10px]">TOTAL DISTANCE</div>
+                  <div className="text-base font-bold text-lime-400">{distanceMeters} m</div>
+                </div>
+                <div className="border-l border-slate-800 pl-4">
+                  <div className="text-slate-400 text-[10px]">NEAR MISSES</div>
+                  <div className="text-base font-bold text-purple-400">{nearMissCount}</div>
+                </div>
+                <div className="border-l border-slate-800 pl-4">
+                  <div className="text-slate-400 text-[10px]">TOTAL COINS</div>
+                  <div className="text-base font-bold text-amber-400">+{coinsCollected}</div>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={handleRestart}
+                  className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl transition flex items-center gap-2"
+                >
+                  <RotateCcw className="w-4 h-4" /> Ride Again
+                </button>
+                <button
+                  onClick={handleExit}
+                  className="px-6 py-2.5 bg-lime-400 hover:bg-lime-300 text-slate-950 font-bold text-xs rounded-xl shadow-lg transition"
+                >
+                  Bank Coins & Exit
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Bottom Control Deck */}

@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Radio, ExternalLink, Footprints, Flame, Heart, ShoppingBag, Fish, Bike, Ship, Camera, Disc } from 'lucide-react';
+import { X, Radio, ExternalLink, Footprints, Flame, Heart, ShoppingBag, Fish, Bike, Ship, Camera, Disc, Mountain } from 'lucide-react';
 import type { RadioStation, Place, LocationEnvironment } from '../types';
 
 interface CityDrawerProps {
@@ -22,6 +22,7 @@ interface CityDrawerProps {
   onTakePhoto?: () => void;
   onOpenRooftopBeat?: () => void;
   onStartDesertBuggy?: () => void;
+  onStartAlpineSki?: () => void;
 }
 
 export const CityDrawer: React.FC<CityDrawerProps> = ({
@@ -43,7 +44,8 @@ export const CityDrawer: React.FC<CityDrawerProps> = ({
   onStartBoating,
   onTakePhoto,
   onOpenRooftopBeat,
-  onStartDesertBuggy
+  onStartDesertBuggy,
+  onStartAlpineSki
 }) => {
   if (!isOpen || !place) return null;
 
@@ -160,6 +162,17 @@ export const CityDrawer: React.FC<CityDrawerProps> = ({
               title="Desert Dune Buggy Cruiser"
             >
               <Flame className="w-4 h-4 text-orange-400" /> Buggy
+            </button>
+          )}
+
+          {/* Alpine Slalom Ski (if alpine) */}
+          {environment?.availableActivities.includes('ski') && (
+            <button
+              onClick={onStartAlpineSki}
+              className="p-2 bg-slate-950/80 hover:bg-slate-800 border border-sky-500/30 hover:border-sky-400 rounded-xl text-sky-300 flex flex-col items-center gap-1 text-[10px] font-bold transition active:scale-95"
+              title="Alpine Slalom & Mountain Descent"
+            >
+              <Mountain className="w-4 h-4 text-sky-400" /> Slalom
             </button>
           )}
 

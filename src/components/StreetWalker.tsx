@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Compass, Footprints, ExternalLink, Navigation, Bike, Ship, Fish, ShoppingBag, Camera, Backpack, Disc, Flame } from 'lucide-react';
+import { Compass, Footprints, ExternalLink, Navigation, Bike, Ship, Fish, ShoppingBag, Camera, Backpack, Disc, Flame, Mountain } from 'lucide-react';
 import type { RadioStation, LocationEnvironment } from '../types';
 
 interface StreetWalkerProps {
@@ -16,6 +16,7 @@ interface StreetWalkerProps {
   onOpenBackpack?: () => void;
   onOpenRooftopBeat?: () => void;
   onStartDesertBuggy?: () => void;
+  onStartAlpineSki?: () => void;
 }
 
 export const StreetWalker: React.FC<StreetWalkerProps> = ({
@@ -31,7 +32,8 @@ export const StreetWalker: React.FC<StreetWalkerProps> = ({
   onTakePhoto,
   onOpenBackpack,
   onOpenRooftopBeat,
-  onStartDesertBuggy
+  onStartDesertBuggy,
+  onStartAlpineSki
 }) => {
   const [heading, setHeading] = useState<number>(0);
   const [pitch, setPitch] = useState<number>(5);
@@ -184,6 +186,17 @@ export const StreetWalker: React.FC<StreetWalkerProps> = ({
                 title="Desert Dune Buggy Cruiser"
               >
                 <Flame className="w-3.5 h-3.5" /> Dune Buggy
+              </button>
+            )}
+
+            {/* Alpine Slalom: In mountain biomes! */}
+            {onStartAlpineSki && environment.availableActivities.includes('ski') && (
+              <button
+                onClick={onStartAlpineSki}
+                className="px-3 py-1.5 bg-slate-800/80 hover:bg-sky-400/20 text-sky-300 hover:text-sky-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 active:scale-95 border border-sky-500/20"
+                title="Alpine Downhill Slalom & MTB Descent"
+              >
+                <Mountain className="w-3.5 h-3.5" /> Alpine Slalom
               </button>
             )}
 

@@ -55,7 +55,7 @@ export interface PassportEntry {
 
 export type EnvironmentType = 'coastal' | 'river' | 'urban' | 'desert' | 'alpine';
 
-export type ActivityMode = 'none' | 'bike' | 'boat' | 'fishing' | 'market' | 'photo' | 'dj' | 'buggy';
+export type ActivityMode = 'none' | 'bike' | 'boat' | 'fishing' | 'market' | 'photo' | 'dj' | 'buggy' | 'ski';
 
 export interface LocationEnvironment {
   biome: EnvironmentType;

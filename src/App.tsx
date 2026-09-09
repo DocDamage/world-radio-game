@@ -36,6 +36,7 @@ import { BackpackModal } from './components/BackpackModal';
 import { PhotoSnapModal } from './components/PhotoSnapModal';
 import { RooftopBeatModal } from './components/RooftopBeatModal';
 import { DesertBuggyModal } from './components/DesertBuggyModal';
+import { AlpineDownhillModal } from './components/AlpineDownhillModal';
 import { soundEffects } from './services/audioEffects';
 import { streamRecorder } from './services/recorder';
 import { gamepadManager } from './services/gamepadManager';
@@ -670,6 +671,7 @@ export function App() {
               onOpenFishing={() => setActivityMode('fishing')}
               onOpenRooftopBeat={() => setActivityMode('dj')}
               onStartDesertBuggy={() => setActivityMode('buggy')}
+              onStartAlpineSki={() => setActivityMode('ski')}
               onOpenMarket={() => setActivityMode('market')}
               onTakePhoto={() => setActivityMode('photo')}
               onOpenBackpack={() => setIsBackpackOpen(true)}
@@ -702,6 +704,10 @@ export function App() {
         onOpenFishing={() => setActivityMode('fishing')}
         onOpenRooftopBeat={() => setActivityMode('dj')}
         onStartDesertBuggy={() => setActivityMode('buggy')}
+        onStartAlpineSki={() => {
+          setIsCityDrawerOpen(false);
+          setActivityMode('ski');
+        }}
         onStartBicycle={() => {
           setIsCityDrawerOpen(false);
           setActivityMode('bike');
@@ -852,6 +858,15 @@ export function App() {
         isOpen={activityMode === 'buggy'}
         onClose={() => setActivityMode('none')}
         cityName={activeStation?.place || selectedPlace?.title || 'Desert'}
+        countryName={activeStation?.country || selectedPlace?.country || 'World'}
+        onEarnCoins={handleEarnCoins}
+      />
+
+      {/* Alpine Slalom & Mountain Descent (Mountain Cities) */}
+      <AlpineDownhillModal
+        isOpen={activityMode === 'ski'}
+        onClose={() => setActivityMode('none')}
+        cityName={activeStation?.place || selectedPlace?.title || 'Alps'}
         countryName={activeStation?.country || selectedPlace?.country || 'World'}
         onEarnCoins={handleEarnCoins}
       />

@@ -370,7 +370,7 @@ function buildEnvironment(
       availableActivities = ['buggy', 'bike', 'market', 'photo'];
       break;
     case 'alpine':
-      availableActivities = ['bike', 'fishing', 'market', 'photo'];
+      availableActivities = ['ski', 'bike', 'fishing', 'market', 'photo'];
       break;
     case 'urban':
     default:

@@ -168,7 +168,7 @@ class RadioAudioEngine {
   }
 
   // Victory fanfare chime when station is discovered or guessed
-  public playTriumphChime() {
+  public playTriumphChime(_volume = 0.25) {
     try {
       this.init();
       if (!this.audioCtx) return;
@@ -178,6 +178,17 @@ class RadioAudioEngine {
           this.playRadarPing(freq, 0.25);
         }, idx * 100);
       });
+    } catch {
+      // Ignore
+    }
+  }
+
+  // Snappy retro UI button / rotary click
+  public playUiClick(_volume = 0.1) {
+    try {
+      this.init();
+      if (!this.audioCtx) return;
+      this.playRadarPing(1600, 0.03);
     } catch {
       // Ignore
     }

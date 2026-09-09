@@ -19,8 +19,8 @@ import { resolveLocationEnvironment } from './services/activityData';
 import { WorldGlobe } from './components/WorldGlobe';
 import { StreetWalker } from './components/StreetWalker';
 import { RadioPlayerBar } from './components/RadioPlayerBar';
-import { SignalHuntHUD } from './components/SignalHuntHUD';
-import { DetectiveHUD } from './components/DetectiveHUD';
+import { SignalHuntModal } from './components/SignalHuntModal';
+import { DetectiveLabModal } from './components/DetectiveLabModal';
 import { PassportModal } from './components/PassportModal';
 import { GeminiGuidePanel } from './components/GeminiGuidePanel';
 import { CityDrawer } from './components/CityDrawer';
@@ -37,6 +37,7 @@ import { PhotoSnapModal } from './components/PhotoSnapModal';
 import { RooftopBeatModal } from './components/RooftopBeatModal';
 import { DesertBuggyModal } from './components/DesertBuggyModal';
 import { AlpineDownhillModal } from './components/AlpineDownhillModal';
+import { SurfingGameModal } from './components/SurfingGameModal';
 import { soundEffects } from './services/audioEffects';
 import { streamRecorder } from './services/recorder';
 import { gamepadManager } from './services/gamepadManager';
@@ -668,6 +669,7 @@ export function App() {
               geminiApiKey={geminiApiKey}
               onStartBicycle={() => setActivityMode('bike')}
               onStartBoating={() => setActivityMode('boat')}
+              onStartSurfing={() => setActivityMode('surf')}
               onOpenFishing={() => setActivityMode('fishing')}
               onOpenRooftopBeat={() => setActivityMode('dj')}
               onStartDesertBuggy={() => setActivityMode('buggy')}
@@ -716,6 +718,10 @@ export function App() {
           setIsCityDrawerOpen(false);
           setActivityMode('boat');
         }}
+        onStartSurfing={() => {
+          setIsCityDrawerOpen(false);
+          setActivityMode('surf');
+        }}
         onTakePhoto={() => {
           setIsCityDrawerOpen(false);
           setMode('street');
@@ -723,27 +729,31 @@ export function App() {
         }}
       />
 
-      {/* Signal Hunt HUD if in Hunt Mode */}
-      {mode === 'hunt' && (
-        <SignalHuntHUD
-          huntState={huntState}
-          onStepCloser={handleHuntStep}
-          onClaimVictory={() => {
-            if (activeStation) stampPassport(activeStation);
-            setMode('explore');
-          }}
-        />
-      )}
+      {/* ARDF Radio Direction Finding (Fox Hunt) Simulation */}
+      <SignalHuntModal
+        isOpen={mode === 'hunt'}
+        onClose={() => setMode('explore')}
+        huntState={huntState}
+        activeStation={activeStation}
+        onStepCloser={handleHuntStep}
+        onClaimVictory={() => {
+          if (activeStation) stampPassport(activeStation);
+          handleEarnCoins(100);
+          setMode('explore');
+        }}
+      />
 
-      {/* Detective HUD if in Detective Mode */}
-      {mode === 'detective' && (
-        <DetectiveHUD
-          detectiveState={detectiveState}
-          onGuessCoords={handleGuessDetective}
-          onNewMystery={startDetectiveMystery}
-          mysteryClue={mysteryClue}
-        />
-      )}
+      {/* Geospatial & Audio Forensics Crime Lab Modal */}
+      <DetectiveLabModal
+        isOpen={mode === 'detective'}
+        onClose={() => setMode('explore')}
+        detectiveState={detectiveState}
+        activeStation={activeStation}
+        onGuessCoords={handleGuessDetective}
+        onNewMystery={startDetectiveMystery}
+        mysteryClue={mysteryClue}
+        onAddCoins={handleEarnCoins}
+      />
 
       {/* Bottom Sticky Radio Player */}
       <RadioPlayerBar
@@ -869,6 +879,15 @@ export function App() {
         cityName={activeStation?.place || selectedPlace?.title || 'Alps'}
         countryName={activeStation?.country || selectedPlace?.country || 'World'}
         onEarnCoins={handleEarnCoins}
+      />
+
+      {/* Ocean Swell Surfing Simulation (Coastal Ocean Cities) */}
+      <SurfingGameModal
+        isOpen={activityMode === 'surf'}
+        onClose={() => setActivityMode('none')}
+        activeStation={activeStation}
+        waterwayName={locationEnvironment.waterwayName}
+        onAddCoins={handleEarnCoins}
       />
 
       {/* Local Store & Market Modal */}

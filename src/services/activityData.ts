@@ -361,7 +361,7 @@ function buildEnvironment(
 
   switch (biome) {
     case 'coastal':
-      availableActivities = ['bike', 'boat', 'fishing', 'market', 'photo'];
+      availableActivities = ['surf', 'bike', 'boat', 'fishing', 'market', 'photo'];
       break;
     case 'river':
       availableActivities = ['bike', 'boat', 'fishing', 'market', 'photo'];

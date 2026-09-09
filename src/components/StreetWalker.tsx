@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Compass, Footprints, ExternalLink, Navigation, Bike, Ship, Fish, ShoppingBag, Camera, Backpack, Disc, Flame, Mountain } from 'lucide-react';
+import { Compass, Footprints, ExternalLink, Navigation, Bike, Ship, Fish, ShoppingBag, Camera, Backpack, Disc, Flame, Mountain, Waves } from 'lucide-react';
 import type { RadioStation, LocationEnvironment } from '../types';
 
 interface StreetWalkerProps {
@@ -10,6 +10,7 @@ interface StreetWalkerProps {
   geminiApiKey: string;
   onStartBicycle?: () => void;
   onStartBoating?: () => void;
+  onStartSurfing?: () => void;
   onOpenFishing?: () => void;
   onOpenMarket?: () => void;
   onTakePhoto?: () => void;
@@ -27,6 +28,7 @@ export const StreetWalker: React.FC<StreetWalkerProps> = ({
   geminiApiKey: _geminiApiKey,
   onStartBicycle,
   onStartBoating,
+  onStartSurfing,
   onOpenFishing,
   onOpenMarket,
   onTakePhoto,
@@ -153,6 +155,17 @@ export const StreetWalker: React.FC<StreetWalkerProps> = ({
                 title="Waterway & Naval Cruise Simulation"
               >
                 <Ship className="w-3.5 h-3.5" /> Boat Nav
+              </button>
+            )}
+
+            {/* Surfing: ONLY in coastal ocean biomes */}
+            {onStartSurfing && environment.availableActivities.includes('surf') && (
+              <button
+                onClick={onStartSurfing}
+                className="px-3 py-1.5 bg-slate-800/80 hover:bg-teal-400/20 text-teal-300 hover:text-teal-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 active:scale-95 border border-teal-500/20"
+                title="Ocean Swell Surfing Simulation"
+              >
+                <Waves className="w-3.5 h-3.5" /> Ocean Surf
               </button>
             )}
 

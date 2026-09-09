@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Radio, ExternalLink, Footprints, Flame, Heart, ShoppingBag, Fish, Bike, Ship, Camera, Disc, Mountain } from 'lucide-react';
+import { X, Radio, ExternalLink, Footprints, Flame, Heart, ShoppingBag, Fish, Bike, Ship, Camera, Disc, Mountain, Waves } from 'lucide-react';
 import type { RadioStation, Place, LocationEnvironment } from '../types';
 
 interface CityDrawerProps {
@@ -19,6 +19,7 @@ interface CityDrawerProps {
   onOpenFishing?: () => void;
   onStartBicycle?: () => void;
   onStartBoating?: () => void;
+  onStartSurfing?: () => void;
   onTakePhoto?: () => void;
   onOpenRooftopBeat?: () => void;
   onStartDesertBuggy?: () => void;
@@ -42,6 +43,7 @@ export const CityDrawer: React.FC<CityDrawerProps> = ({
   onOpenFishing,
   onStartBicycle,
   onStartBoating,
+  onStartSurfing,
   onTakePhoto,
   onOpenRooftopBeat,
   onStartDesertBuggy,
@@ -129,6 +131,17 @@ export const CityDrawer: React.FC<CityDrawerProps> = ({
               title="Waterway Naval Navigation"
             >
               <Ship className="w-4 h-4 text-cyan-400" /> Boat
+            </button>
+          )}
+
+          {/* Ocean Surfing (ONLY in coastal biome) */}
+          {environment?.availableActivities.includes('surf') && (
+            <button
+              onClick={onStartSurfing}
+              className="p-2 bg-slate-950/80 hover:bg-slate-800 border border-teal-500/30 hover:border-teal-400 rounded-xl text-teal-300 flex flex-col items-center gap-1 text-[10px] font-bold transition active:scale-95"
+              title="Ocean Swell Surfing Simulation"
+            >
+              <Waves className="w-4 h-4 text-teal-400" /> Surf
             </button>
           )}
 

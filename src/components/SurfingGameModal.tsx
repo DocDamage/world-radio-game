@@ -101,15 +101,22 @@ export const SurfingGameModal: React.FC<SurfingGameModalProps> = ({
 
   // Mission context (World Expedition Command), read fresh by the 60fps loop.
   const scenarioRef = useRef<MissionScenario | null | undefined>(undefined);
-  scenarioRef.current = missionScenario;
+  useEffect(() => {
+    scenarioRef.current = missionScenario;
+  });
   const missionSettledRef = useRef<boolean>(false);
 
-  // Fresh session each time the modal opens (clears any stale finished state)
+  // Fresh session each time the modal opens: refs reset in the effect, the
+  // finished state is adjusted during render (no cascading setState-in-effect)
   useEffect(() => {
     if (!isOpen) return;
     missionSettledRef.current = false;
-    setGameState('ready');
   }, [isOpen]);
+  const [prevSurfOpen, setPrevSurfOpen] = useState(isOpen);
+  if (isOpen !== prevSurfOpen) {
+    setPrevSurfOpen(isOpen);
+    if (isOpen) setGameState('ready');
+  }
 
   // Settle the active mission exactly once — only when the ride is kicked out
   // on the open shoulder (finished). Wipeouts and early exits never settle,

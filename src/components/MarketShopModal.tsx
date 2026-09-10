@@ -54,22 +54,37 @@ export const MarketShopModal: React.FC<MarketShopModalProps> = ({
 
   // Mission context (World Expedition Command), read fresh by handlers.
   const scenarioRef = useRef<MissionScenario | null | undefined>(undefined);
-  scenarioRef.current = missionScenario;
+  useEffect(() => {
+    scenarioRef.current = missionScenario;
+  });
   const missionSettledRef = useRef<boolean>(false);
   const dishesServedRef = useRef<number>(0);
   const missionScoreRef = useRef<number>(0);
   const [missionDishes, setMissionDishes] = useState<number>(0);
   const [missionKitchenScore, setMissionKitchenScore] = useState<number>(0);
 
-  // Reset mission bookkeeping once per open
+  // Reset mission bookkeeping once per open: refs reset in the effect,
+  // display state is adjusted during render (no cascading setState-in-effect)
   useEffect(() => {
     if (!isOpen) return;
     missionSettledRef.current = false;
     dishesServedRef.current = 0;
     missionScoreRef.current = 0;
-    setMissionDishes(0);
-    setMissionKitchenScore(0);
   }, [isOpen]);
+  const [prevMarketOpen, setPrevMarketOpen] = useState(isOpen);
+  if (isOpen !== prevMarketOpen) {
+    setPrevMarketOpen(isOpen);
+    if (isOpen) {
+      setMissionDishes(0);
+      setMissionKitchenScore(0);
+    } else {
+      // Clean up prep state when the modal closes
+      setActivePrepItem(null);
+      setPrepStep('heat');
+      setCookingScore(0);
+      setLastStepFeedback('');
+    }
+  }
 
   // Settle the active mission exactly once — only when the crew order is
   // complete (dishesTarget dishes served). Canceled preps and early exits
@@ -119,16 +134,6 @@ export const MarketShopModal: React.FC<MarketShopModalProps> = ({
 
     return () => clearInterval(interval);
   }, [isOpen, activePrepItem, prepStep, tempDirection]);
-
-  // Clean up state when modal closes
-  useEffect(() => {
-    if (!isOpen) {
-      setActivePrepItem(null);
-      setPrepStep('heat');
-      setCookingScore(0);
-      setLastStepFeedback('');
-    }
-  }, [isOpen]);
 
   // Shared modal a11y: Escape to close, focus trap, focus restore
   const { containerRef: dialogRef, dialogProps } = useModalA11y({ isOpen, onClose });

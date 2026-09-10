@@ -9,6 +9,16 @@ import {
   type GlobeTilesStatus
 } from '../services/globeTiles';
 
+function detectWebGlSupport(): boolean {
+  try {
+    const testCanvas = document.createElement('canvas');
+    const gl = testCanvas.getContext('webgl') || testCanvas.getContext('experimental-webgl');
+    return Boolean(gl);
+  } catch {
+    return false;
+  }
+}
+
 interface WorldGlobeProps {
   stations: RadioStation[];
   activeStation: RadioStation | null;
@@ -34,41 +44,28 @@ export const WorldGlobe: React.FC<WorldGlobeProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const globeInstanceRef = useRef<any>(null);
-  const [webGlSupported, setWebGlSupported] = useState<boolean>(true);
+  const [webGlSupported] = useState<boolean>(detectWebGlSupport);
 
-  // Keep latest callbacks in refs to avoid recreating the Globe instance on every prop change
+  // Keep latest callbacks in refs to avoid recreating the Globe instance on
+  // every prop change. Refs are synced in an effect (never during render).
   const onSelectStationRef = useRef(onSelectStation);
-  onSelectStationRef.current = onSelectStation;
-
   const onGlobeClickRef = useRef(onGlobeClick);
-  onGlobeClickRef.current = onGlobeClick;
-
   const activeStationRef = useRef(activeStation);
-  activeStationRef.current = activeStation;
-
   const isMysteryModeRef = useRef(isMysteryMode);
-  isMysteryModeRef.current = isMysteryMode;
-
-  // Photorealistic 3D Tiles layer handle + status callback ref
-  const tilesLayerRef = useRef<GlobeTilesLayer | null>(null);
   const onTilesStatusChangeRef = useRef(onTilesStatusChange);
-  onTilesStatusChangeRef.current = onTilesStatusChange;
+  useEffect(() => {
+    onSelectStationRef.current = onSelectStation;
+    onGlobeClickRef.current = onGlobeClick;
+    activeStationRef.current = activeStation;
+    isMysteryModeRef.current = isMysteryMode;
+    onTilesStatusChangeRef.current = onTilesStatusChange;
+  });
+
+  // Photorealistic 3D Tiles layer handle
+  const tilesLayerRef = useRef<GlobeTilesLayer | null>(null);
 
   useEffect(() => {
-    if (!containerRef.current) return;
-
-    // Check WebGL availability
-    try {
-      const testCanvas = document.createElement('canvas');
-      const gl = testCanvas.getContext('webgl') || testCanvas.getContext('experimental-webgl');
-      if (!gl) {
-        setWebGlSupported(false);
-        return;
-      }
-    } catch {
-      setWebGlSupported(false);
-      return;
-    }
+    if (!containerRef.current || !webGlSupported) return;
 
     // Initialize Globe.gl
     const globe = new Globe(containerRef.current)
@@ -155,7 +152,7 @@ export const WorldGlobe: React.FC<WorldGlobeProps> = ({
         globeInstanceRef.current._destructor?.();
       }
     };
-  }, []);
+  }, [webGlSupported]);
 
   // Update points data
   useEffect(() => {

@@ -67,18 +67,10 @@ export function App() {
   const [activeStation, setActiveStation] = useState<RadioStation | null>(CURATED_STATIONS[0]);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [mode, setMode] = useState<AppMode>('explore');
-  
-  // Keep latest references for stable callbacks
-  const stationsRef = useRef(stations);
-  stationsRef.current = stations;
-  const activeStationRef = useRef(activeStation);
-  activeStationRef.current = activeStation;
 
   // Selected City & City Drawer
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
   const [cityStations, setCityStations] = useState<RadioStation[]>([]);
-  const cityStationsRef = useRef(cityStations);
-  cityStationsRef.current = cityStations;
 
   const [isCityDrawerOpen, setIsCityDrawerOpen] = useState<boolean>(false);
   const [isPaletteOpen, setIsPaletteOpen] = useState<boolean>(false);
@@ -334,12 +326,12 @@ export function App() {
   };
 
   // Toggle Favorite (single source of truth: travelerState store)
-  const handleToggleFavorite = (station: RadioStation) => {
+  const handleToggleFavorite = useCallback((station: RadioStation) => {
     travelerState.toggleFavorite(station);
-  };
+  }, []);
 
   // Add a station visit to Passport (store handles duplicate stamps + XP award)
-  const stampPassport = (station: RadioStation) => {
+  const stampPassport = useCallback((station: RadioStation) => {
     const newEntry: PassportEntry = {
       stationUuid: station.id,
       stationName: station.name,
@@ -351,10 +343,10 @@ export function App() {
       coordinates: { lat: station.geo_lat, lng: station.geo_long }
     };
     travelerState.addPassportEntry(newEntry);
-  };
+  }, []);
 
   // Select station
-  const handleSelectStation = async (station: RadioStation) => {
+  const handleSelectStation = useCallback(async (station: RadioStation) => {
     setActiveStation(station);
     setPlayerCoords({ lat: station.geo_lat, lng: station.geo_long });
     setIsPlaying(true);
@@ -375,7 +367,7 @@ export function App() {
       });
       setIsCityDrawerOpen(true);
     }
-  };
+  }, [stampPassport]);
 
   const handleFastTravelPassport = useCallback((entry: PassportEntry) => {
     const station: RadioStation = stations.find(s => s.id === entry.stationUuid) || {
@@ -391,10 +383,10 @@ export function App() {
     };
     handleSelectStation(station);
     setMode('street');
-  }, [stations]);
+  }, [stations, handleSelectStation]);
 
   // Next / Prev station
-  const handleNextStation = () => {
+  const handleNextStation = useCallback(() => {
     if (cityStations.length > 1 && activeStation) {
       const idx = cityStations.findIndex(s => s.id === activeStation.id);
       const nextIdx = (idx + 1) % cityStations.length;
@@ -404,9 +396,9 @@ export function App() {
       const nextIdx = (idx + 1) % stations.length;
       handleSelectStation(stations[nextIdx]);
     }
-  };
+  }, [cityStations, stations, activeStation, handleSelectStation]);
 
-  const handlePrevStation = () => {
+  const handlePrevStation = useCallback(() => {
     if (cityStations.length > 1 && activeStation) {
       const idx = cityStations.findIndex(s => s.id === activeStation.id);
       const prevIdx = (idx - 1 + cityStations.length) % cityStations.length;
@@ -416,7 +408,7 @@ export function App() {
       const prevIdx = (idx - 1 + stations.length) % stations.length;
       handleSelectStation(stations[prevIdx]);
     }
-  };
+  }, [cityStations, stations, activeStation, handleSelectStation]);
 
   const handleSelectPlace = async (place: Place) => {
     const { byPlace } = await loadStationsSnapshot();
@@ -433,12 +425,12 @@ export function App() {
   };
 
   // Teleport to random station
-  const handleRandomStation = () => {
+  const handleRandomStation = useCallback(() => {
     if (stations.length === 0) return;
     const random = stations[Math.floor(Math.random() * stations.length)];
     soundEffects.playStaticBurst(0.3, 0.2);
     handleSelectStation(random);
-  };
+  }, [stations, handleSelectStation]);
 
   // Start Signal Hunt Game
   const startSignalHunt = () => {
@@ -684,7 +676,7 @@ export function App() {
     } else if (e.key === 'ArrowLeft') {
       handlePrevStation();
     }
-  }, [activeStation, cityStations, stations, handleToggleRecord]);
+  }, [activeStation, handleNextStation, handlePrevStation, handleRandomStation, handleToggleFavorite, handleToggleRecord]);
 
   // Modern Gamepad GTA-style controls integration
   useEffect(() => {
@@ -726,7 +718,7 @@ export function App() {
       clearInterval(checkGp);
       gamepadManager.destroy();
     };
-  }, [handleNextStation, handlePrevStation, handleToggleRecord, activeStation]);
+  }, [handleNextStation, handlePrevStation, handleRandomStation, handleToggleFavorite, handleToggleRecord, activeStation]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);

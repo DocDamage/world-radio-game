@@ -38,24 +38,35 @@ export const WorldMonitorModal: React.FC<WorldMonitorModalProps> = ({
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [postcardSavedMsg, setPostcardSavedMsg] = useState<string>('');
 
-  // Auto-select nearby camera if available
-  useEffect(() => {
-    if (activeCity) {
-      const match = WORLD_CAMERAS.find(c =>
-        c.city.toLowerCase().includes(activeCity.toLowerCase()) ||
-        activeCity.toLowerCase().includes(c.city.toLowerCase())
-      );
-      if (match) {
-        setActiveCam(match);
-      }
-    }
-  }, [activeCity]);
+  // Auto-select nearby camera if available (state adjusted during render when
+  // the active city changes — no effect needed, no cascading renders)
+  const [prevCity, setPrevCity] = useState(activeCity);
+  if (activeCity !== prevCity) {
+    setPrevCity(activeCity);
+    const match = activeCity
+      ? WORLD_CAMERAS.find(c =>
+          c.city.toLowerCase().includes(activeCity.toLowerCase()) ||
+          activeCity.toLowerCase().includes(c.city.toLowerCase())
+        )
+      : undefined;
+    if (match) setActiveCam(match);
+  }
 
   // Live USGS seismic feed (M2.5+, past 24h) — fetched when the monitor opens
   const [quakes, setQuakes] = useState<QuakeEvent[]>([]);
   const [quakeStatus, setQuakeStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle');
   const [quakeFetchedAt, setQuakeFetchedAt] = useState<number | null>(null);
   const [quakeError, setQuakeError] = useState<string>('');
+
+  // Clock for "X min ago" labels. Reading Date.now() during render would be
+  // impure, so the timestamp lives in state and ticks once a minute while the
+  // monitor is open (which also keeps the ages fresh, unlike a stale snapshot).
+  const [nowMs, setNowMs] = useState<number>(() => Date.now());
+  useEffect(() => {
+    if (!isOpen) return;
+    const clock = setInterval(() => setNowMs(Date.now()), 60000);
+    return () => clearInterval(clock);
+  }, [isOpen]);
 
   const fetchQuakes = useCallback(async () => {
     setQuakeStatus('loading');
@@ -89,8 +100,18 @@ export const WorldMonitorModal: React.FC<WorldMonitorModalProps> = ({
     }
   }, []);
 
+  // Fetch the live feed when the monitor opens. The fetch is deferred to a
+  // microtask so its synchronous loading-state transition doesn't run inside
+  // the effect body (which would trigger cascading renders).
   useEffect(() => {
-    if (isOpen) fetchQuakes();
+    if (!isOpen) return;
+    let cancelled = false;
+    void Promise.resolve().then(() => {
+      if (!cancelled) fetchQuakes();
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [isOpen, fetchQuakes]);
 
   // Camera feed capability checks: public CCTV stills can be offline, rate
@@ -434,9 +455,9 @@ export const WorldMonitorModal: React.FC<WorldMonitorModalProps> = ({
                       {quakeStatus === 'ok' && quakes.length > 0 && (() => {
                         const strongest = quakes.reduce((a, b) => (b.mag > a.mag ? b : a), quakes[0]);
                         const latest = quakes[0];
-                        const ageMin = Math.max(1, Math.round((Date.now() - latest.time) / 60000));
+                        const ageMin = Math.max(1, Math.round((nowMs - latest.time) / 60000));
                         const syncAgeMin = quakeFetchedAt
-                          ? Math.max(1, Math.round((Date.now() - quakeFetchedAt) / 60000))
+                          ? Math.max(1, Math.round((nowMs - quakeFetchedAt) / 60000))
                           : null;
                         return (
                           <>

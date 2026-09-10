@@ -68,34 +68,41 @@ export const BicycleGameModal: React.FC<BicycleGameModalProps> = ({
   // Mission context (World Expedition Command). Kept in a ref so the 60fps loop
   // and event handlers always read the latest scenario without re-subscribing.
   const scenarioRef = useRef<MissionScenario | null | undefined>(undefined);
-  scenarioRef.current = missionScenario;
+  useEffect(() => {
+    scenarioRef.current = missionScenario;
+  });
   const missionSettledRef = useRef<boolean>(false);
 
   // Settle the active mission exactly once — only when the route is completed.
   // Crashes and early exits never settle, so retrying is never punished and
-  // quitting mid-ride can never farm mission rewards.
-  const settleMission = useCallback(() => {
-    const scenario = scenarioRef.current;
-    if (!scenario || missionSettledRef.current) return;
-    missionSettledRef.current = true;
-    const w = scenario.scoreWeights || {};
-    const score = Math.round(
-      distanceRef.current +
-      coinsRef.current * (w.coin ?? 5) +
-      nearMissRef.current * (w.nearMiss ?? 10)
-    );
-    onMissionResult?.({
-      missionId: scenario.missionId,
-      gameId: scenario.gameId,
-      score,
-      outcome: 'completed',
-      stats: {
-        distance: Math.round(distanceRef.current),
-        coins: coinsRef.current,
-        nearMisses: nearMissRef.current
-      }
-    });
-  }, [onMissionResult]);
+  // quitting mid-ride can never farm mission rewards. Run stats are passed in
+  // by the caller (the game loop) instead of read from refs here, keeping this
+  // render-created callback free of ref reads.
+  const settleMission = useCallback(
+    (stats: { distance: number; coins: number; nearMisses: number }) => {
+      const scenario = scenarioRef.current;
+      if (!scenario || missionSettledRef.current) return;
+      missionSettledRef.current = true;
+      const w = scenario.scoreWeights || {};
+      const score = Math.round(
+        stats.distance +
+        stats.coins * (w.coin ?? 5) +
+        stats.nearMisses * (w.nearMiss ?? 10)
+      );
+      onMissionResult?.({
+        missionId: scenario.missionId,
+        gameId: scenario.gameId,
+        score,
+        outcome: 'completed',
+        stats: {
+          distance: Math.round(stats.distance),
+          coins: stats.coins,
+          nearMisses: stats.nearMisses
+        }
+      });
+    },
+    [onMissionResult]
+  );
 
   // Internal mutable refs for 60fps game loop
   const gameStateRef = useRef<BicycleState>('riding');
@@ -322,7 +329,11 @@ export const BicycleGameModal: React.FC<BicycleGameModalProps> = ({
           }
           confetti({ particleCount: 90, spread: 70, origin: { y: 0.6 } });
           soundEffects.playTriumphChime(0.5);
-          settleMission(); // mission settles exactly once, on route completion
+          settleMission({ // mission settles exactly once, on route completion
+            distance: distanceRef.current,
+            coins: coinsRef.current,
+            nearMisses: nearMissRef.current
+          });
         }
 
         // Road curve swaying

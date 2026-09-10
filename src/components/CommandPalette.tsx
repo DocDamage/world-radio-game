@@ -25,17 +25,24 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Focus and initialize on open
-  useEffect(() => {
-    if (isOpen) {
-      const timer = setTimeout(() => {
-        inputRef.current?.focus();
-      }, 50);
-      return () => clearTimeout(timer);
-    } else {
+  // Clear the query whenever the palette closes (state adjusted during render —
+  // no effect needed, React discards the partial render and re-renders)
+  const [prevOpen, setPrevOpen] = useState(isOpen);
+  if (isOpen !== prevOpen) {
+    setPrevOpen(isOpen);
+    if (!isOpen) {
       setQuery('');
       setSelectedIndex(0);
     }
+  }
+
+  // Focus the input on open
+  useEffect(() => {
+    if (!isOpen) return;
+    const timer = setTimeout(() => {
+      inputRef.current?.focus();
+    }, 50);
+    return () => clearTimeout(timer);
   }, [isOpen]);
 
   // Search logic

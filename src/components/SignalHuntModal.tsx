@@ -41,20 +41,27 @@ export const SignalHuntModal: React.FC<SignalHuntModalProps> = ({
 
   // Mission context (World Expedition Command), read fresh by handlers.
   const scenarioRef = useRef<MissionScenario | null | undefined>(undefined);
-  scenarioRef.current = missionScenario;
+  useEffect(() => {
+    scenarioRef.current = missionScenario;
+  });
   const missionSettledRef = useRef<boolean>(false);
   const stepsTakenRef = useRef<number>(0);
   const lobErrorsRef = useRef<number[]>([]);
   const [missionSteps, setMissionSteps] = useState<number>(0);
 
-  // Reset mission bookkeeping once per open
+  // Reset mission bookkeeping once per open (refs in the effect, display state
+  // adjusted during render — no cascading setState-in-effect)
   useEffect(() => {
     if (!isOpen) return;
     missionSettledRef.current = false;
     stepsTakenRef.current = 0;
     lobErrorsRef.current = [];
-    setMissionSteps(0);
   }, [isOpen]);
+  const [prevHuntOpen, setPrevHuntOpen] = useState(isOpen);
+  if (isOpen !== prevHuntOpen) {
+    setPrevHuntOpen(isOpen);
+    if (isOpen) setMissionSteps(0);
+  }
 
   // Settle the active mission exactly once — only when the clandestine
   // transmitter is captured. Score rewards triangulation quality: capture
@@ -116,7 +123,7 @@ export const SignalHuntModal: React.FC<SignalHuntModalProps> = ({
   // Beam lobe formula: cos(angleDiff/2)^exponent gives high forward peak and
   // deep side/back nulls. Mission scenarios tune the directivity — a yagi
   // array is razor sharp while the attenuated loop sensor sweeps wide.
-  const beamExponent = scenarioRef.current?.beamExponent ?? 3.8;
+  const beamExponent = missionScenario?.beamExponent ?? 3.8;
   const directionalGain = Math.pow(Math.max(0, Math.cos(angleDiffRad / 2)), beamExponent);
 
   // Proximity signal: inverted distance curve
@@ -304,7 +311,7 @@ export const SignalHuntModal: React.FC<SignalHuntModalProps> = ({
       ctx.font = 'bold 10px monospace';
       ctx.fillText('📡 TX', beaconX + 10, beaconY + 3);
     }
-  }, [azimuthDeg, bearingPlots, distanceMeters, isBeaconUnlocked, dLat, dLng, playerPos.lat]);
+  }, [azimuthDeg, bearingPlots, distanceMeters, isBeaconUnlocked, dLat, dLng, playerPos.lat, beamExponent]);
 
   // Shared modal a11y: Escape to close, focus trap, focus restore
   const { containerRef: dialogRef, dialogProps } = useModalA11y({ isOpen, onClose });

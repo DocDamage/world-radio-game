@@ -33,8 +33,12 @@ export function useModalA11y<T extends HTMLElement = HTMLDivElement>({
   onClose
 }: UseModalA11yOptions) {
   const containerRef = useRef<T | null>(null);
+  // Latest-value ref: assigned in an effect (never during render) so the
+  // keydown handler always calls the freshest close callback.
   const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
 
   useEffect(() => {
     if (!isOpen) return;

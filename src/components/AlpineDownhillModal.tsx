@@ -81,13 +81,17 @@ export const AlpineDownhillModal: React.FC<AlpineDownhillModalProps> = ({
   const runSettledRef = useRef<boolean>(false);
 
   const highScoreRef = useRef(highScore);
-  highScoreRef.current = highScore;
   const onUpdateHighScoreRef = useRef(onUpdateHighScore);
-  onUpdateHighScoreRef.current = onUpdateHighScore;
+  useEffect(() => {
+    highScoreRef.current = highScore;
+    onUpdateHighScoreRef.current = onUpdateHighScore;
+  });
 
   // Mission context (World Expedition Command), read fresh by the 60fps loop.
   const scenarioRef = useRef<MissionScenario | null | undefined>(undefined);
-  scenarioRef.current = missionScenario;
+  useEffect(() => {
+    scenarioRef.current = missionScenario;
+  });
   const missionSettledRef = useRef<boolean>(false);
 
   // Settle the active mission exactly once — only when the descent is
@@ -393,7 +397,7 @@ export const AlpineDownhillModal: React.FC<AlpineDownhillModalProps> = ({
     return () => {
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
     };
-  }, [isOpen, settleMission]);
+  }, [isOpen, settleMission, FINISH_DISTANCE]);
 
   const handleExit = () => {
     if (coinsRef.current > 0 && !runSettledRef.current) {

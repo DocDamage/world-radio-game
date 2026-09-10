@@ -81,7 +81,9 @@ export const FishingGameModal: React.FC<FishingGameModalProps> = ({
 
   // Mission context (World Expedition Command), read fresh by handlers.
   const scenarioRef = useRef<MissionScenario | null | undefined>(undefined);
-  scenarioRef.current = missionScenario;
+  useEffect(() => {
+    scenarioRef.current = missionScenario;
+  });
   const missionSettledRef = useRef<boolean>(false);
   const missionCatchRef = useRef<number>(0);
   const missionScoreRef = useRef<number>(0);
@@ -90,14 +92,21 @@ export const FishingGameModal: React.FC<FishingGameModalProps> = ({
 
   // Reset mission bookkeeping once per open. The main sim-loop effect re-runs
   // on every streak change (each landed/lost fish), so it must not own these.
+  // Refs reset in the effect; display state is adjusted during render.
   useEffect(() => {
     if (!isOpen) return;
     missionSettledRef.current = false;
     missionCatchRef.current = 0;
     missionScoreRef.current = 0;
-    setMissionCatches(0);
-    setMissionJournalScore(0);
   }, [isOpen]);
+  const [prevFishingOpen, setPrevFishingOpen] = useState(isOpen);
+  if (isOpen !== prevFishingOpen) {
+    setPrevFishingOpen(isOpen);
+    if (isOpen) {
+      setMissionCatches(0);
+      setMissionJournalScore(0);
+    }
+  }
 
   // Settle the active mission exactly once — only when the field journal is
   // complete (catchTarget specimen landed). Lost lines and early exits never

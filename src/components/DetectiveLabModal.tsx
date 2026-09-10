@@ -90,7 +90,9 @@ export const DetectiveLabModal: React.FC<DetectiveLabModalProps> = ({
 
   // Mission context (World Expedition Command), read fresh by handlers.
   const scenarioRef = useRef<MissionScenario | null | undefined>(undefined);
-  scenarioRef.current = missionScenario;
+  useEffect(() => {
+    scenarioRef.current = missionScenario;
+  });
   const missionSettledRef = useRef<boolean>(false);
 
   // Reset mission bookkeeping once per open

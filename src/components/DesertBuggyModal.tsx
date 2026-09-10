@@ -83,13 +83,17 @@ export const DesertBuggyModal: React.FC<DesertBuggyModalProps> = ({
   const runSettledRef = useRef<boolean>(false);
 
   const highScoreRef = useRef(highScore);
-  highScoreRef.current = highScore;
   const onUpdateHighScoreRef = useRef(onUpdateHighScore);
-  onUpdateHighScoreRef.current = onUpdateHighScore;
+  useEffect(() => {
+    highScoreRef.current = highScore;
+    onUpdateHighScoreRef.current = onUpdateHighScore;
+  });
 
   // Mission context (World Expedition Command), read fresh by the 60fps loop.
   const scenarioRef = useRef<MissionScenario | null | undefined>(undefined);
-  scenarioRef.current = missionScenario;
+  useEffect(() => {
+    scenarioRef.current = missionScenario;
+  });
   const missionSettledRef = useRef<boolean>(false);
 
   // Settle the active mission exactly once — only when the rally is completed
@@ -372,8 +376,8 @@ export const DesertBuggyModal: React.FC<DesertBuggyModalProps> = ({
               if (healthRef.current <= 0) {
                 buggyStateRef.current = 'crashed';
                 setBuggyState('crashed');
-                if (onUpdateHighScore && Math.round(distanceRef.current) > highScore) {
-                  onUpdateHighScore(Math.round(distanceRef.current));
+                if (onUpdateHighScoreRef.current && Math.round(distanceRef.current) > highScoreRef.current) {
+                  onUpdateHighScoreRef.current(Math.round(distanceRef.current));
                 }
                 soundEffects.playStaticBurst(0.3, 0.4);
               }
@@ -444,7 +448,7 @@ export const DesertBuggyModal: React.FC<DesertBuggyModalProps> = ({
     return () => {
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
     };
-  }, [isOpen, settleMission]);
+  }, [isOpen, settleMission, FINISH_DISTANCE]);
 
   const handleExit = () => {
     if (coinsRef.current > 0 && !runSettledRef.current) {

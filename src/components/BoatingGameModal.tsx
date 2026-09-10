@@ -86,7 +86,9 @@ export const BoatingGameModal: React.FC<BoatingGameModalProps> = ({
 
   // Mission context (World Expedition Command), read fresh by the 60fps loop
   const scenarioRef = useRef<MissionScenario | null | undefined>(undefined);
-  scenarioRef.current = missionScenario;
+  useEffect(() => {
+    scenarioRef.current = missionScenario;
+  });
   const missionSettledRef = useRef<boolean>(false);
   const totalCratesRef = useRef<number>(2);
 

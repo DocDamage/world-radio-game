@@ -80,18 +80,25 @@ export const RooftopBeatModal: React.FC<RooftopBeatModalProps> = ({
 
   // Mission context (World Expedition Command), read fresh by handlers.
   const scenarioRef = useRef<MissionScenario | null | undefined>(undefined);
-  scenarioRef.current = missionScenario;
+  useEffect(() => {
+    scenarioRef.current = missionScenario;
+  });
   const missionSettledRef = useRef<boolean>(false);
   const onBeatHitsRef = useRef<number>(0);
   const [missionHits, setMissionHits] = useState<number>(0);
 
-  // Reset mission bookkeeping once per open
+  // Reset mission bookkeeping once per open (refs in the effect, display
+  // state adjusted during render — no cascading setState-in-effect)
   useEffect(() => {
     if (!isOpen) return;
     missionSettledRef.current = false;
     onBeatHitsRef.current = 0;
-    setMissionHits(0);
   }, [isOpen]);
+  const [prevDjOpen, setPrevDjOpen] = useState(isOpen);
+  if (isOpen !== prevDjOpen) {
+    setPrevDjOpen(isOpen);
+    if (isOpen) setMissionHits(0);
+  }
 
   // Settle the active mission exactly once — only when the set's on-beat hit
   // target is reached. Offbeat-heavy sets and early exits never settle.

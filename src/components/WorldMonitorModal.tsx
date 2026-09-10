@@ -1,9 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Camera, Eye, X, ExternalLink, RefreshCw, LayoutGrid, Maximize2, Radio, Activity, Sun, Compass } from 'lucide-react';
 import { WORLD_CAMERAS, type WorldCamera, type CameraCategory } from '../services/cctvCatalog';
 import { soundEffects } from '../services/audioEffects';
 import { travelerState } from '../services/travelerState';
 import type { BackpackItem } from '../types';
+
+// USGS real-time earthquake GeoJSON summary feed (M2.5+ events, past 24 hours)
+const USGS_FEED_URL = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson';
+
+interface QuakeEvent {
+  id: string;
+  mag: number;
+  place: string;
+  time: number;   // epoch ms
+  depthKm: number;
+}
 
 interface WorldMonitorModalProps {
   isOpen: boolean;
@@ -39,6 +50,48 @@ export const WorldMonitorModal: React.FC<WorldMonitorModalProps> = ({
     }
   }, [activeCity]);
 
+  // Live USGS seismic feed (M2.5+, past 24h) — fetched when the monitor opens
+  const [quakes, setQuakes] = useState<QuakeEvent[]>([]);
+  const [quakeStatus, setQuakeStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle');
+  const [quakeFetchedAt, setQuakeFetchedAt] = useState<number | null>(null);
+  const [quakeError, setQuakeError] = useState<string>('');
+
+  const fetchQuakes = useCallback(async () => {
+    setQuakeStatus('loading');
+    setQuakeError('');
+    try {
+      const res = await fetch(USGS_FEED_URL);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const geo = await res.json();
+      const events: QuakeEvent[] = ((geo.features as unknown[] | undefined) || [])
+        .map((f): QuakeEvent => {
+          const feature = f as {
+            id: string;
+            properties?: { mag?: number; place?: string; time?: number };
+            geometry?: { coordinates?: number[] };
+          };
+          return {
+            id: feature.id,
+            mag: typeof feature.properties?.mag === 'number' ? feature.properties.mag : 0,
+            place: feature.properties?.place || 'Unknown region',
+            time: typeof feature.properties?.time === 'number' ? feature.properties.time : Date.now(),
+            depthKm: Math.round(feature.geometry?.coordinates?.[2] ?? 0)
+          };
+        })
+        .sort((a, b) => b.time - a.time);
+      setQuakes(events);
+      setQuakeFetchedAt(Date.now());
+      setQuakeStatus('ok');
+    } catch (err) {
+      setQuakeError(err instanceof Error ? err.message : 'Network error');
+      setQuakeStatus('error');
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) fetchQuakes();
+  }, [isOpen, fetchQuakes]);
+
   if (!isOpen) return null;
 
   const filteredCams = selectedCategory === 'all'
@@ -48,6 +101,7 @@ export const WorldMonitorModal: React.FC<WorldMonitorModalProps> = ({
   const handleRefresh = () => {
     setIsRefreshing(true);
     soundEffects.playUiClick(0.15);
+    fetchQuakes();
     setTimeout(() => setIsRefreshing(false), 600);
   };
 
@@ -91,11 +145,11 @@ export const WorldMonitorModal: React.FC<WorldMonitorModalProps> = ({
                   World Monitor & Camera Wall
                 </h2>
                 <span className="text-[10px] font-mono bg-emerald-950 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-bold">
-                  LIVE SENSORS & OBSERVATORIES
+                  CAMERAS + LIVE USGS FEED
                 </span>
               </div>
               <p className="text-xs text-slate-400">
-                Public live camera streams • Synchronized with worldwide radio broadcast soundtrack
+                Public camera streams • Live USGS seismic data • Synchronized with your radio soundtrack
               </p>
             </div>
           </div>
@@ -264,32 +318,82 @@ export const WorldMonitorModal: React.FC<WorldMonitorModalProps> = ({
                   </div>
                 </div>
 
-                {/* Environmental Overview Telemetry (USGS / Space / Air) */}
+                {/* Environmental Overview Telemetry (live USGS + planned feeds) */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="bg-slate-900/60 border border-slate-800 p-3 rounded-2xl flex items-center gap-3">
-                    <Activity className="w-5 h-5 text-amber-400" />
-                    <div>
-                      <div className="text-[10px] font-mono uppercase text-slate-400">Earthquake Seismic Feed</div>
-                      <div className="text-xs font-bold text-slate-200">USGS M2.5+ Global Active</div>
-                      <div className="text-[10px] text-emerald-400">All regional stations nominal</div>
+                  <div className="bg-slate-900/60 border border-slate-800 p-3 rounded-2xl flex items-start gap-3">
+                    <Activity className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-[10px] font-mono uppercase text-slate-400">USGS Earthquakes (M2.5+, 24h)</div>
+                        <a
+                          href="https://earthquake.usgs.gov/earthquakes/feed/"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[9px] font-mono text-emerald-400 hover:text-emerald-300 shrink-0"
+                        >
+                          source ↗
+                        </a>
+                      </div>
+                      {quakeStatus === 'loading' && (
+                        <div className="text-xs text-slate-300 font-bold animate-pulse">Fetching live seismic feed…</div>
+                      )}
+                      {quakeStatus === 'error' && (
+                        <div>
+                          <div className="text-xs font-bold text-rose-400">Live feed unavailable</div>
+                          <div className="text-[10px] text-slate-400">{quakeError}</div>
+                          <button
+                            onClick={fetchQuakes}
+                            className="mt-1 text-[10px] font-mono text-amber-400 hover:text-amber-300 underline"
+                          >
+                            Retry now
+                          </button>
+                        </div>
+                      )}
+                      {quakeStatus === 'ok' && quakes.length === 0 && (
+                        <div className="text-xs font-bold text-slate-200">
+                          No M2.5+ earthquakes in the past 24 hours
+                        </div>
+                      )}
+                      {quakeStatus === 'ok' && quakes.length > 0 && (() => {
+                        const strongest = quakes.reduce((a, b) => (b.mag > a.mag ? b : a), quakes[0]);
+                        const latest = quakes[0];
+                        const ageMin = Math.max(1, Math.round((Date.now() - latest.time) / 60000));
+                        const syncAgeMin = quakeFetchedAt
+                          ? Math.max(1, Math.round((Date.now() - quakeFetchedAt) / 60000))
+                          : null;
+                        return (
+                          <>
+                            <div className="text-xs font-bold text-slate-200">
+                              {quakes.length} events • Strongest M{strongest.mag.toFixed(1)}
+                            </div>
+                            <div className="text-[10px] text-amber-300 truncate" title={strongest.place}>
+                              {strongest.place} • {strongest.depthKm} km deep
+                            </div>
+                            <div className="text-[10px] text-slate-400">
+                              Latest {ageMin < 60 ? `${ageMin} min ago` : `${Math.round(ageMin / 60)} h ago`}
+                              {syncAgeMin !== null && ` • synced ${syncAgeMin} min ago`}
+                            </div>
+                          </>
+                        );
+                      })()}
                     </div>
                   </div>
 
-                  <div className="bg-slate-900/60 border border-slate-800 p-3 rounded-2xl flex items-center gap-3">
-                    <Sun className="w-5 h-5 text-sky-400" />
-                    <div>
+                  <div className="bg-slate-900/60 border border-slate-800 p-3 rounded-2xl flex items-start gap-3">
+                    <Sun className="w-5 h-5 text-sky-400 shrink-0 mt-0.5" />
+                    <div className="min-w-0">
                       <div className="text-[10px] font-mono uppercase text-slate-400">Space Weather Solar Flux</div>
-                      <div className="text-xs font-bold text-slate-200">Solar Index: S1 Minor</div>
-                      <div className="text-[10px] text-sky-300">HF Radio Propagation Good</div>
+                      <div className="text-xs font-bold text-slate-400">Planned feed — not yet live</div>
+                      <div className="text-[10px] text-slate-500">NOAA SWPC integration in a future update</div>
                     </div>
                   </div>
 
-                  <div className="bg-slate-900/60 border border-slate-800 p-3 rounded-2xl flex items-center gap-3">
-                    <Compass className="w-5 h-5 text-lime-400" />
-                    <div>
+                  <div className="bg-slate-900/60 border border-slate-800 p-3 rounded-2xl flex items-start gap-3">
+                    <Compass className="w-5 h-5 text-lime-400 shrink-0 mt-0.5" />
+                    <div className="min-w-0">
                       <div className="text-[10px] font-mono uppercase text-slate-400">Maritime & Aviation</div>
-                      <div className="text-xs font-bold text-slate-200">OpenSky & AIS Channels</div>
-                      <div className="text-[10px] text-slate-400">Ref O03 / O04 feeds active</div>
+                      <div className="text-xs font-bold text-slate-400">Planned feed — not yet live</div>
+                      <div className="text-[10px] text-slate-500">OpenSky / AIS integration in a future update</div>
                     </div>
                   </div>
                 </div>

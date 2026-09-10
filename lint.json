@@ -1,8 +1,0 @@
-{ "diagnostics": [{"message": "React Hook useEffect has a missing dependency: 'webGlSupported'","code": "react-hooks(exhaustive-deps)","severity": "warning","url": "https://oxc.rs/docs/guide/usage/linter/rules/react/exhaustive-deps.html","help": "Either include it or remove the dependency array.","filename": "src/components/WorldGlobe.tsx","labels": [{"label": "useEffect uses `webGlSupported` here","span": {"offset": 2398,"length": 14,"line": 68,"column": 35}},{"span": {"offset": 6131,"length": 2,"line": 155,"column": 6}}]},
-{"message": "React Hook useEffect has a missing dependency: 'handleToggleFavorite'","code": "react-hooks(exhaustive-deps)","severity": "warning","url": "https://oxc.rs/docs/guide/usage/linter/rules/react/exhaustive-deps.html","help": "Either include it or remove the dependency array.","filename": "src/App.tsx","labels": [{"label": "useEffect uses `handleToggleFavorite` here","span": {"offset": 27377,"length": 20,"line": 700,"column": 28}},{"span": {"offset": 28018,"length": 94,"line": 721,"column": 6}}]}],
-              "number_of_files": 54,
-              "number_of_rules": 116,
-              "threads_count": 20,
-              "start_time": 0.0607474
-            }
-            

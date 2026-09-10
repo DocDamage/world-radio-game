@@ -13,7 +13,12 @@ import {
   Coins, 
   Zap,
   Compass,
-  Eye
+  Eye,
+  Layers,
+  KeyRound,
+  Loader2,
+  X,
+  ExternalLink
 } from 'lucide-react';
 import type { RadioStation, AppMode, SignalHuntState, DetectiveState, PassportEntry, Place, BackpackItem, ActivityMode } from './types';
 import { fetchTopStations, CURATED_STATIONS, loadStationsSnapshot } from './services/radioApi';
@@ -32,6 +37,7 @@ import { buildScenario } from './missions/scenarios';
 import { MISSION_CATALOG, EXPEDITIONS } from './missions/catalog';
 import { MissionResults, type MissionDebriefData } from './components/MissionResults';
 import type { GameId, MissionScenario, MissionResultPayload } from './missions/types';
+import { isGlobeTilesKeyUsable, type GlobeTilesStatus } from './services/globeTiles';
 
 // Code-split heavy 3D Globe, Street View, and Mini-Game Modals to optimize bundle size
 const WorldGlobe = lazy(() => import('./components/WorldGlobe').then(m => ({ default: m.WorldGlobe })));
@@ -106,6 +112,53 @@ export function App() {
   const [geminiApiKey, setGeminiApiKey] = useState<string>(() => {
     return localStorage.getItem('world_radio_gemini_key') || '';
   });
+
+  // Google Photorealistic 3D Tiles (Map Tiles API key stored locally, like the Gemini key)
+  const [tilesApiKey, setTilesApiKey] = useState<string>(() => localStorage.getItem('world_radio_tiles_key') || '');
+  const [tilesEnabled, setTilesEnabled] = useState<boolean>(() => localStorage.getItem('world_radio_tiles_enabled') === '1');
+  const [tilesStatus, setTilesStatus] = useState<GlobeTilesStatus>({ phase: 'disabled' });
+  const [isTilesSettingsOpen, setIsTilesSettingsOpen] = useState<boolean>(false);
+  const [tilesKeyDraft, setTilesKeyDraft] = useState<string>('');
+
+  const handleTilesStatusChange = useCallback((status: GlobeTilesStatus) => setTilesStatus(status), []);
+
+  const handleSaveTilesApiKey = useCallback((key: string) => {
+    const trimmed = key.trim();
+    setTilesApiKey(trimmed);
+    localStorage.setItem('world_radio_tiles_key', trimmed);
+    if (isGlobeTilesKeyUsable(trimmed)) {
+      setTilesEnabled(prev => {
+        if (!prev) localStorage.setItem('world_radio_tiles_enabled', '1');
+        return true;
+      });
+      setIsTilesSettingsOpen(false);
+    }
+  }, []);
+
+  const toggleTilesEnabled = useCallback(() => {
+    if (!isGlobeTilesKeyUsable(tilesApiKey)) {
+      // No key yet: open the settings popover instead of toggling.
+      setTilesKeyDraft(tilesApiKey);
+      setIsTilesSettingsOpen(true);
+      return;
+    }
+    setTilesEnabled(prev => {
+      const next = !prev;
+      localStorage.setItem('world_radio_tiles_enabled', next ? '1' : '0');
+      return next;
+    });
+  }, [tilesApiKey]);
+
+  // Close the tiles key popover on Escape when focus is outside its input.
+  useEffect(() => {
+    if (!isTilesSettingsOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsTilesSettingsOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isTilesSettingsOpen]);
+
 
   // Street Player position
   const [playerCoords, setPlayerCoords] = useState<{ lat: number; lng: number }>({
@@ -840,6 +893,94 @@ export function App() {
           >
             <Eye className="w-3.5 h-3.5 text-emerald-400" /> Monitor
           </button>
+
+          {/* Google Photorealistic 3D Tiles */}
+          <div className="relative flex items-center gap-1">
+            <button
+              onClick={toggleTilesEnabled}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition border flex items-center gap-1.5 ${
+                tilesEnabled
+                  ? tilesStatus.phase === 'error'
+                    ? 'bg-rose-950/80 text-rose-300 border-rose-500/50'
+                    : 'bg-cyan-950/80 hover:bg-cyan-900/90 text-cyan-300 border-cyan-400/50 shadow-md shadow-cyan-500/10'
+                  : 'bg-slate-900/80 hover:bg-slate-800 text-slate-400 border-slate-700/80'
+              }`}
+              title="Google Photorealistic 3D Tiles — zoom from orbit down to street level"
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>3D Tiles</span>
+              {tilesEnabled && tilesStatus.phase === 'loading' && <Loader2 className="w-3 h-3 animate-spin" />}
+              {tilesEnabled && tilesStatus.phase === 'ready' && <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />}
+              {tilesEnabled && tilesStatus.phase === 'error' && <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />}
+            </button>
+            <button
+              onClick={() => {
+                setTilesKeyDraft(tilesApiKey);
+                setIsTilesSettingsOpen(v => !v);
+              }}
+              className={`px-2 py-1.5 rounded-xl border transition ${
+                isTilesSettingsOpen
+                  ? 'bg-cyan-600 text-white border-cyan-400'
+                  : 'bg-slate-900/80 hover:bg-slate-800 text-slate-400 border-slate-700/80'
+              }`}
+              title="Map Tiles API key settings"
+            >
+              <KeyRound className="w-3 h-3" />
+            </button>
+
+            {isTilesSettingsOpen && (
+              <div className="absolute top-full right-0 mt-2 w-80 z-50 bg-slate-950/95 backdrop-blur border border-slate-700/80 rounded-2xl p-4 space-y-3 shadow-2xl">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                    <Layers className="w-3.5 h-3.5 text-cyan-400" /> Photorealistic 3D Tiles
+                  </div>
+                  <button
+                    onClick={() => setIsTilesSettingsOpen(false)}
+                    className="text-slate-500 hover:text-slate-300 transition"
+                    title="Close"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <p className="text-[11px] leading-relaxed text-slate-400">
+                  Stream Google's Photorealistic 3D Tiles onto the globe and zoom from orbit down to street level.
+                  Paste a Google Maps Platform key with the <span className="text-slate-300 font-mono">Map Tiles API</span> enabled — it's stored only in your browser, just like the Gemini key.
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="password"
+                    value={tilesKeyDraft}
+                    onChange={e => setTilesKeyDraft(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') handleSaveTilesApiKey(tilesKeyDraft);
+                      if (e.key === 'Escape') setIsTilesSettingsOpen(false);
+                    }}
+                    placeholder="AIza…"
+                    className="flex-1 min-w-0 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-cyan-500/60"
+                  />
+                  <button
+                    onClick={() => handleSaveTilesApiKey(tilesKeyDraft)}
+                    className="px-3 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-xs font-bold transition active:scale-95"
+                  >
+                    Save
+                  </button>
+                </div>
+                <a
+                  href="https://console.cloud.google.com/google/maps-apis/credentials"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-[10px] text-cyan-400/80 hover:text-cyan-300 transition"
+                >
+                  Get a key in Google Cloud Console <ExternalLink className="w-3 h-3" />
+                </a>
+                {tilesEnabled && tilesStatus.phase === 'error' && (
+                  <div className="text-[10px] leading-relaxed text-rose-300 bg-rose-950/50 border border-rose-500/30 rounded-xl p-2">
+                    {tilesStatus.message}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
@@ -866,6 +1007,9 @@ export function App() {
             stations={stations}
             activeStation={activeStation}
             onSelectStation={handleSelectStation}
+            tilesApiKey={tilesApiKey}
+            tilesEnabled={tilesEnabled}
+            onTilesStatusChange={handleTilesStatusChange}
           />
         ) : (
           activeStation && (
@@ -890,6 +1034,18 @@ export function App() {
         )}
         </Suspense>
       </main>
+
+      {/* Google 3D Tiles status + attribution (required while the layer is active) */}
+      {tilesEnabled && tilesStatus.phase === 'loading' && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-30 px-3 py-1.5 rounded-full bg-slate-950/80 backdrop-blur border border-cyan-500/30 text-[10px] text-cyan-300 max-w-[80vw] truncate pointer-events-none">
+          🛰️ Streaming photorealistic 3D tiles…
+        </div>
+      )}
+      {tilesEnabled && tilesStatus.phase === 'ready' && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-30 px-3 py-1.5 rounded-full bg-slate-950/80 backdrop-blur border border-slate-700/60 text-[10px] text-slate-400 max-w-[80vw] truncate pointer-events-none">
+          🛰️ Photorealistic 3D Tiles — {tilesStatus.attribution || 'Data © Google'}
+        </div>
+      )}
 
       {/* Lazy world overlays: drawer, fox hunt, and detective lab */}
       <Suspense fallback={null}>

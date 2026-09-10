@@ -10,6 +10,7 @@ Built on top of **Radio Garden**, **OpenRadio**, and 3D globe visualization, Ter
 
 ### 1. Global 3D Radio Exploration
 - **Interactive Orbit Globe**: Spin the globe and tune into thousands of live radio streams from Tokyo to Paris, Reykjavik, Havana, and Nairobi.
+- **Photorealistic 3D Tiles (opt-in)**: Stream Google's Photorealistic 3D Tiles onto the globe and zoom from orbit down to real streets and skylines — bring your own Google Maps Platform key (Map Tiles API) via the **3D Tiles** button; the key is stored only in your browser, like the Gemini key.
 - **3D Street Walker**: Drop into real street panoramas with WASD / gamepad navigation, compass headings, and local ambient audio.
 - **City Drawer**: Explore all broadcasting stations in any selected city with instantaneous switching, favorites, and genre tags.
 - **Command Palette (`Ctrl+K` or `/`)**: Rapid search across stations, cities, and countries.

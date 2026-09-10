@@ -2,6 +2,12 @@ import React, { useEffect, useRef, useState } from 'react';
 import Globe from 'globe.gl';
 import type { RadioStation } from '../types';
 import { escapeHtml } from '../services/radioApi';
+import {
+  createGlobeTilesLayer,
+  isGlobeTilesKeyUsable,
+  type GlobeTilesLayer,
+  type GlobeTilesStatus
+} from '../services/globeTiles';
 
 interface WorldGlobeProps {
   stations: RadioStation[];
@@ -9,6 +15,11 @@ interface WorldGlobeProps {
   onSelectStation: (station: RadioStation) => void;
   onGlobeClick?: (coords: { lat: number; lng: number }) => void;
   isMysteryMode?: boolean;
+  /** Google Maps Platform key (Map Tiles API) — required for the 3D Tiles layer. */
+  tilesApiKey?: string;
+  /** Toggles the Photorealistic 3D Tiles layer on top of the globe. */
+  tilesEnabled?: boolean;
+  onTilesStatusChange?: (status: GlobeTilesStatus) => void;
 }
 
 export const WorldGlobe: React.FC<WorldGlobeProps> = ({
@@ -16,7 +27,10 @@ export const WorldGlobe: React.FC<WorldGlobeProps> = ({
   activeStation,
   onSelectStation,
   onGlobeClick,
-  isMysteryMode = false
+  isMysteryMode = false,
+  tilesApiKey = '',
+  tilesEnabled = false,
+  onTilesStatusChange
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const globeInstanceRef = useRef<any>(null);
@@ -34,6 +48,11 @@ export const WorldGlobe: React.FC<WorldGlobeProps> = ({
 
   const isMysteryModeRef = useRef(isMysteryMode);
   isMysteryModeRef.current = isMysteryMode;
+
+  // Photorealistic 3D Tiles layer handle + status callback ref
+  const tilesLayerRef = useRef<GlobeTilesLayer | null>(null);
+  const onTilesStatusChangeRef = useRef(onTilesStatusChange);
+  onTilesStatusChangeRef.current = onTilesStatusChange;
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -160,6 +179,49 @@ export const WorldGlobe: React.FC<WorldGlobeProps> = ({
       1400 // Animation duration in ms
     );
   }, [activeStation]);
+
+  // Google Photorealistic 3D Tiles layer (opt-in; needs a Map Tiles API key).
+  // The globe instance is created by the effect above, which runs first, so
+  // globeInstanceRef is populated by the time this effect executes.
+  useEffect(() => {
+    const globe = globeInstanceRef.current;
+    if (!globe || !tilesEnabled || !isGlobeTilesKeyUsable(tilesApiKey)) {
+      onTilesStatusChangeRef.current?.({ phase: 'disabled' });
+      return;
+    }
+
+    let disposed = false;
+    (async () => {
+      try {
+        const layer = await createGlobeTilesLayer({
+          apiKey: tilesApiKey,
+          globe,
+          onStatus: (status) => {
+            if (!disposed) onTilesStatusChangeRef.current?.(status);
+          }
+        });
+        if (disposed) {
+          // Unmounted while the heavy stack was still downloading.
+          layer.dispose();
+          return;
+        }
+        tilesLayerRef.current = layer;
+      } catch (err) {
+        if (!disposed) {
+          onTilesStatusChangeRef.current?.({
+            phase: 'error',
+            message: err instanceof Error ? err.message : String(err)
+          });
+        }
+      }
+    })();
+
+    return () => {
+      disposed = true;
+      tilesLayerRef.current?.dispose();
+      tilesLayerRef.current = null;
+    };
+  }, [tilesEnabled, tilesApiKey]);
 
   if (!webGlSupported) {
     return (

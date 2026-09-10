@@ -8,8 +8,44 @@ export class RadioStreamRecorder {
   private onTimeUpdate?: (seconds: number) => void;
   private contentType: string = 'audio/mpeg';
 
+  /**
+   * Fetch candidates for a stream URL, in priority order.
+   *
+   * The `/stream-proxy` middleware only exists on the local vite dev server,
+   * so in production builds we always try the direct stream URL first (many
+   * stations send permissive CORS headers) and only fall back to the proxy
+   * path, which succeeds when the app happens to be deployed behind one.
+   */
+  private buildFetchCandidates(streamUrl: string): string[] {
+    const proxyUrl = `/stream-proxy?url=${encodeURIComponent(streamUrl)}`;
+    const isDev = import.meta.env.DEV;
+    return isDev ? [proxyUrl, streamUrl] : [streamUrl, proxyUrl];
+  }
+
   public async startRecording(
     streamUrl: string,
+    onTimeUpdate?: (seconds: number) => void,
+    onError?: (reason: string) => void
+  ): Promise<boolean> {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      onError?.('You are offline — reconnect to the internet before recording.');
+      return false;
+    }
+
+    // Try each candidate transport until one starts streaming chunks
+    for (const candidateUrl of this.buildFetchCandidates(streamUrl)) {
+      const started = await this.tryStartRecording(candidateUrl, onTimeUpdate);
+      if (started) return true;
+    }
+
+    onError?.(
+      'Recording unavailable for this stream — the station blocks direct capture outside the app dev environment. Try another station.'
+    );
+    return false;
+  }
+
+  private async tryStartRecording(
+    fetchUrl: string,
     onTimeUpdate?: (seconds: number) => void
   ): Promise<boolean> {
     try {
@@ -17,11 +53,8 @@ export class RadioStreamRecorder {
       this.audioChunks = [];
       this.abortController = new AbortController();
 
-      // Proxy url through local vite dev server to avoid browser CORS blocks
-      const proxyUrl = `/stream-proxy?url=${encodeURIComponent(streamUrl)}`;
-
-      // Fetch the audio stream directly
-      const response = await fetch(proxyUrl, {
+      // Fetch the audio stream (directly, or via the dev-server proxy)
+      const response = await fetch(fetchUrl, {
         signal: this.abortController.signal,
         headers: { Accept: '*/*' }
       });
@@ -62,8 +95,19 @@ export class RadioStreamRecorder {
       return true;
     } catch (err) {
       console.warn('Stream fetch recording error:', err);
+      this.cleanupFailedStart();
       return false;
     }
+  }
+
+  /** Abort a half-open attempt so the next candidate starts cleanly. */
+  private cleanupFailedStart() {
+    if (this.abortController) {
+      this.abortController.abort();
+      this.abortController = null;
+    }
+    this.isRecording = false;
+    this.audioChunks = [];
   }
 
   public stopRecording(stationName: string, placeName: string): Blob | null {

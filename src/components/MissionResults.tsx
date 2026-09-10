@@ -1,6 +1,7 @@
 import React from 'react';
 import { Trophy, Coins, Zap, X, Play, Flag } from 'lucide-react';
 import { soundEffects } from '../services/audioEffects';
+import { useModalA11y } from '../hooks/useModalA11y';
 
 export interface MissionExpeditionProgress {
   title: string;
@@ -43,6 +44,10 @@ const MEDAL_META: Record<'bronze' | 'silver' | 'gold', { icon: string; ring: str
  * and expedition progress with a continue hook for the next leg.
  */
 export const MissionResults: React.FC<MissionResultsProps> = ({ data, onClose, onNextMission }) => {
+  // Shared modal a11y: Escape to close, focus trap, focus restore. The debrief
+  // only mounts while open, so the dialog is always "open" from its view.
+  const { containerRef: dialogRef, dialogProps } = useModalA11y({ isOpen: true, onClose });
+
   const medal = MEDAL_META[data.medal];
   const t = data.thresholds;
   const pct = Math.min(100, Math.round((data.score / t.gold) * 100));
@@ -53,7 +58,7 @@ export const MissionResults: React.FC<MissionResultsProps> = ({ data, onClose, o
 
   return (
     <div className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-lg flex items-center justify-center p-3 sm:p-5 select-none">
-      <div className="relative w-full max-w-lg bg-slate-950 border border-lime-400/50 rounded-3xl overflow-hidden shadow-2xl flex flex-col text-slate-100">
+      <div ref={dialogRef} {...dialogProps} className="relative w-full max-w-lg bg-slate-950 border border-lime-400/50 rounded-3xl overflow-hidden shadow-2xl flex flex-col text-slate-100">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 bg-slate-900/90 border-b border-slate-800">
           <div className="flex items-center gap-2.5">

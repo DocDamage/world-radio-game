@@ -3,6 +3,7 @@ import { X, Award, Waves, Zap } from 'lucide-react';
 import type { RadioStation } from '../types';
 import { soundEffects } from '../services/audioEffects';
 import { MissionHUD } from './MissionHUD';
+import { useModalA11y } from '../hooks/useModalA11y';
 import type { MissionScenario, MissionResultPayload } from '../missions/types';
 import confetti from 'canvas-confetti';
 
@@ -692,11 +693,14 @@ export const SurfingGameModal: React.FC<SurfingGameModalProps> = ({
     };
   }, [isOpen, gameState, onAddCoins, longestTubeTime, highScore, onUpdateHighScore, settleMission]);
 
+  // Shared modal a11y: Escape to close, focus trap, focus restore
+  const { containerRef: dialogRef, dialogProps } = useModalA11y({ isOpen, onClose });
+
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-slate-950/80 backdrop-blur-md">
-      <div className="relative w-full max-w-3xl bg-slate-900 border border-sky-500/30 rounded-3xl shadow-2xl overflow-hidden flex flex-col">
+      <div ref={dialogRef} {...dialogProps} className="relative w-full max-w-3xl bg-slate-900 border border-sky-500/30 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[94vh]">
         {/* Header */}
         <div className="p-4 border-b border-sky-500/20 flex items-center justify-between bg-gradient-to-r from-sky-950/80 to-slate-900">
           <div className="flex items-center gap-3">

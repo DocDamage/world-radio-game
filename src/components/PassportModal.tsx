@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { BookOpen, X, MapPin, Radio, Calendar, Award, Compass, Play, Globe2 } from 'lucide-react';
 import type { PassportEntry } from '../types';
 import { soundEffects } from '../services/audioEffects';
+import { useModalA11y } from '../hooks/useModalA11y';
 
 interface PassportModalProps {
   isOpen: boolean;
@@ -28,6 +29,9 @@ export const PassportModal: React.FC<PassportModalProps> = ({
     return { title: 'Novice Traveler', badge: '📻', color: 'text-lime-400 border-lime-500/40 bg-lime-950/80' };
   }, [entries.length]);
 
+  // Shared modal a11y: Escape to close, focus trap, focus restore
+  const { containerRef: dialogRef, dialogProps } = useModalA11y({ isOpen, onClose });
+
   if (!isOpen) return null;
 
   const handleTravel = (entry: PassportEntry) => {
@@ -40,7 +44,7 @@ export const PassportModal: React.FC<PassportModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 select-none">
-      <div className="relative w-full max-w-2xl bg-gradient-to-b from-slate-900 to-slate-950 border border-cyan-500/30 rounded-3xl p-6 shadow-2xl flex flex-col max-h-[85vh] text-slate-100">
+      <div ref={dialogRef} {...dialogProps} className="relative w-full max-w-2xl bg-gradient-to-b from-slate-900 to-slate-950 border border-cyan-500/30 rounded-3xl p-4 sm:p-6 shadow-2xl flex flex-col max-h-[88vh] overflow-y-auto overscroll-contain text-slate-100">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
           <div className="flex items-center gap-3">

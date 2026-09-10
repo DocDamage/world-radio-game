@@ -12,6 +12,30 @@ html, body, #root {
   color: #f8fafc;
 }
 
+/* Mobile: avoid rubber-band scrolling behind full-screen modal overlays */
+body {
+  overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Notched-device safe areas (iPhone Dynamic Island, Android gesture bar) */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.safe-area-x {
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+/* Compact horizontal scroll strip for the app header on narrow screens */
+.header-scroll {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.header-scroll::-webkit-scrollbar {
+  display: none;
+}
+
 /* Custom scrollbar for passport list */
 ::-webkit-scrollbar {
   width: 6px;

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Cpu, X, Zap, Sliders, CheckCircle2, ExternalLink, ShieldCheck, Activity } from 'lucide-react';
 import { dlss5 } from '../services/dlss5Engine';
 import type { GpuArchitectureInfo, DlssMode } from '../services/dlss5Engine';
+import { useModalA11y } from '../hooks/useModalA11y';
 
 interface Dlss5ModalProps {
   isOpen: boolean;
@@ -21,6 +22,9 @@ export const Dlss5Modal: React.FC<Dlss5ModalProps> = ({
   const [multiplier, setMultiplier] = useState<number>(dlss5.getConfig().frameGenMultiplier);
   const [sharpness, setSharpness] = useState<number>(dlss5.getConfig().sharpness);
   const [hdrUplift, setHdrUplift] = useState<boolean>(dlss5.getConfig().hdrUplift);
+
+  // Shared modal a11y: Escape to close, focus trap, focus restore
+  const { containerRef: dialogRef, dialogProps } = useModalA11y({ isOpen, onClose });
 
   if (!isOpen) return null;
 
@@ -56,7 +60,7 @@ export const Dlss5Modal: React.FC<Dlss5ModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="relative w-full max-w-xl bg-gradient-to-b from-slate-900 to-slate-950 border border-emerald-400/50 rounded-3xl p-6 shadow-2xl flex flex-col gap-5 text-slate-100 max-h-[90vh] overflow-y-auto">
+      <div ref={dialogRef} {...dialogProps} className="relative w-full max-w-xl bg-gradient-to-b from-slate-900 to-slate-950 border border-emerald-400/50 rounded-3xl p-4 sm:p-6 shadow-2xl flex flex-col gap-5 text-slate-100 max-h-[90vh] overflow-y-auto overscroll-contain">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-800 pb-4">
           <div className="flex items-center gap-3">

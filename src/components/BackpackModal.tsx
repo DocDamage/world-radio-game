@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Backpack, X, MapPin, Calendar, Trash2, Eye, Coins, Camera, Disc, Fish, Sparkles } from 'lucide-react';
 import type { BackpackItem } from '../types';
 import { soundEffects } from '../services/audioEffects';
+import { useModalA11y } from '../hooks/useModalA11y';
 
 interface BackpackModalProps {
   isOpen: boolean;
@@ -21,6 +22,9 @@ export const BackpackModal: React.FC<BackpackModalProps> = ({
   const [filter, setFilter] = useState<'all' | 'food' | 'souvenir' | 'fish' | 'vinyl' | 'photo'>('all');
   const [inspectedItem, setInspectedItem] = useState<BackpackItem | null>(null);
 
+  // Shared modal a11y: Escape to close, focus trap, focus restore
+  const { containerRef: dialogRef, dialogProps } = useModalA11y({ isOpen, onClose });
+
   if (!isOpen) return null;
 
   const filteredItems = filter === 'all' ? items : items.filter(i => i.category === filter);
@@ -38,7 +42,7 @@ export const BackpackModal: React.FC<BackpackModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 select-none">
-      <div className="relative w-full max-w-2xl bg-gradient-to-b from-slate-900 to-slate-950 border border-lime-400/30 rounded-3xl p-6 shadow-2xl flex flex-col gap-4 text-slate-100 max-h-[85vh]">
+      <div ref={dialogRef} {...dialogProps} className="relative w-full max-w-2xl bg-gradient-to-b from-slate-900 to-slate-950 border border-lime-400/30 rounded-3xl p-4 sm:p-6 shadow-2xl flex flex-col gap-4 text-slate-100 max-h-[88vh] overflow-y-auto overscroll-contain">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
           <div className="flex items-center gap-3">

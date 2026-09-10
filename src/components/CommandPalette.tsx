@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Search, MapPin, Radio, X, CornerDownLeft, Sparkles } from 'lucide-react';
 import type { RadioStation, Place } from '../types';
 import { searchStations, fetchPlaces } from '../services/radioApi';
+import { useModalA11y } from '../hooks/useModalA11y';
 
 interface CommandPaletteProps {
   isOpen: boolean;
@@ -119,6 +120,9 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     }
   };
 
+  // Shared modal a11y: Escape to close, focus trap, focus restore
+  const { containerRef: dialogRef, dialogProps } = useModalA11y({ isOpen, onClose });
+
   if (!isOpen) return null;
 
   return (
@@ -127,6 +131,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       onClick={onClose}
     >
       <div
+        ref={dialogRef}
+        {...dialogProps}
         className="relative w-full max-w-xl bg-slate-900 border border-lime-400/40 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[75vh] animate-in fade-in zoom-in-95 duration-150"
         onClick={e => e.stopPropagation()}
       >

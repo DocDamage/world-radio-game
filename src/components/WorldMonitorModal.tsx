@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Camera, Eye, X, ExternalLink, RefreshCw, LayoutGrid, Maximize2, Radio, Activity, Sun, Compass } from 'lucide-react';
+import { Camera, Eye, X, ExternalLink, RefreshCw, LayoutGrid, Maximize2, Radio, Activity, Sun, Compass, AlertCircle } from 'lucide-react';
 import { WORLD_CAMERAS, type WorldCamera, type CameraCategory } from '../services/cctvCatalog';
 import { soundEffects } from '../services/audioEffects';
 import { travelerState } from '../services/travelerState';
+import { useModalA11y } from '../hooks/useModalA11y';
 import type { BackpackItem } from '../types';
 
 // USGS real-time earthquake GeoJSON summary feed (M2.5+ events, past 24 hours)
@@ -92,6 +93,41 @@ export const WorldMonitorModal: React.FC<WorldMonitorModalProps> = ({
     if (isOpen) fetchQuakes();
   }, [isOpen, fetchQuakes]);
 
+  // Camera feed capability checks: public CCTV stills can be offline, rate
+  // limited, or geo-blocked — track per-feed load state and offer cache-busting
+  // retries instead of showing a broken image tile.
+  const [feedStatus, setFeedStatus] = useState<Record<string, 'loading' | 'ok' | 'error'>>({});
+  const [feedReloadToken, setFeedReloadToken] = useState<number>(0);
+  const [isOffline, setIsOffline] = useState<boolean>(
+    typeof navigator !== 'undefined' ? !navigator.onLine : false
+  );
+
+  useEffect(() => {
+    const updateOnline = () => setIsOffline(!navigator.onLine);
+    window.addEventListener('online', updateOnline);
+    window.addEventListener('offline', updateOnline);
+    return () => {
+      window.removeEventListener('online', updateOnline);
+      window.removeEventListener('offline', updateOnline);
+    };
+  }, []);
+
+  const feedUrl = (cam: WorldCamera) => {
+    const sep = cam.streamUrl.includes('?') ? '&' : '?';
+    return feedReloadToken > 0 ? `${cam.streamUrl}${sep}_t=${feedReloadToken}` : cam.streamUrl;
+  };
+
+  const handleFeedLoad = (camId: string) => setFeedStatus(prev => ({ ...prev, [camId]: 'ok' }));
+  const handleFeedError = (camId: string) => setFeedStatus(prev => ({ ...prev, [camId]: 'error' }));
+  const retryFeed = (cam: WorldCamera) => {
+    soundEffects.playUiClick(0.15);
+    setFeedStatus(prev => ({ ...prev, [cam.id]: 'loading' }));
+    setFeedReloadToken(t => t + 1);
+  };
+
+  // Shared modal a11y: Escape to close, focus trap, focus restore
+  const { containerRef: dialogRef, dialogProps } = useModalA11y({ isOpen, onClose });
+
   if (!isOpen) return null;
 
   const filteredCams = selectedCategory === 'all'
@@ -99,9 +135,14 @@ export const WorldMonitorModal: React.FC<WorldMonitorModalProps> = ({
     : WORLD_CAMERAS.filter(c => c.category === selectedCategory);
 
   const handleRefresh = () => {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      // the offline banner explains why nothing refreshes
+      return;
+    }
     setIsRefreshing(true);
     soundEffects.playUiClick(0.15);
     fetchQuakes();
+    setFeedReloadToken(t => t + 1);
     setTimeout(() => setIsRefreshing(false), 600);
   };
 
@@ -132,7 +173,7 @@ export const WorldMonitorModal: React.FC<WorldMonitorModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 select-none">
-      <div className="relative w-full max-w-6xl bg-slate-950 border border-emerald-400/40 rounded-3xl overflow-hidden shadow-2xl flex flex-col text-slate-100 max-h-[92vh]">
+      <div ref={dialogRef} {...dialogProps} className="relative w-full max-w-6xl bg-slate-950 border border-emerald-400/40 rounded-3xl overflow-hidden shadow-2xl flex flex-col text-slate-100 max-h-[92vh] overflow-y-auto overscroll-contain">
         {/* Top Header */}
         <div className="flex items-center justify-between px-6 py-4 bg-slate-900/90 border-b border-slate-800">
           <div className="flex items-center gap-3">
@@ -271,10 +312,46 @@ export const WorldMonitorModal: React.FC<WorldMonitorModalProps> = ({
                 {/* Main Large Feed View */}
                 <div className="relative aspect-video w-full rounded-2xl overflow-hidden border border-slate-800 shadow-2xl bg-black">
                   <img
-                    src={activeCam.streamUrl}
+                    src={feedUrl(activeCam)}
                     alt={activeCam.name}
                     className="w-full h-full object-cover"
+                    onLoad={() => handleFeedLoad(activeCam.id)}
+                    onError={() => handleFeedError(activeCam.id)}
                   />
+
+                  {/* Feed connecting spinner */}
+                  {(feedStatus[activeCam.id] ?? 'loading') === 'loading' && (
+                    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-slate-950">
+                      <div className="w-8 h-8 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
+                      <div className="text-[11px] font-mono text-slate-400">
+                        Connecting to {activeCam.city} camera…
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Feed offline: capability check failed, offer a retry */}
+                  {feedStatus[activeCam.id] === 'error' && (
+                    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-slate-950">
+                      <Camera className="w-8 h-8 text-rose-400" />
+                      <div className="text-xs font-bold text-rose-300">Feed unavailable</div>
+                      <div className="text-[10px] text-slate-400 max-w-xs text-center">
+                        The {activeCam.provider} stream is offline, rate-limited, or unreachable from your network right now.
+                      </div>
+                      <button
+                        onClick={() => retryFeed(activeCam)}
+                        className="mt-1 px-3.5 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold rounded-xl flex items-center gap-1.5 transition"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" /> Retry Feed
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Offline banner */}
+                  {isOffline && (
+                    <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-center gap-2 bg-rose-950/80 border-b border-rose-500/40 py-1.5 text-[10px] font-mono text-rose-300">
+                      <AlertCircle className="w-3.5 h-3.5" /> Offline — reconnect to load camera feeds
+                    </div>
+                  )}
 
                   {/* Top Feed Overlay */}
                   <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none">
@@ -409,10 +486,27 @@ export const WorldMonitorModal: React.FC<WorldMonitorModalProps> = ({
                       className="relative aspect-video rounded-2xl overflow-hidden border border-slate-800 bg-black group"
                     >
                       <img
-                        src={cam.streamUrl}
+                        src={feedUrl(cam)}
                         alt={cam.name}
                         className="w-full h-full object-cover"
+                        onLoad={() => handleFeedLoad(cam.id)}
+                        onError={() => handleFeedError(cam.id)}
                       />
+                      {(feedStatus[cam.id] ?? 'loading') === 'loading' && (
+                        <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-950">
+                          <div className="w-6 h-6 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
+                        </div>
+                      )}
+                      {feedStatus[cam.id] === 'error' && (
+                        <button
+                          onClick={() => retryFeed(cam)}
+                          className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-1.5 bg-slate-950/90 text-[11px] font-bold text-rose-300 transition hover:bg-slate-900"
+                          title="Retry this camera feed"
+                        >
+                          <RefreshCw className="w-5 h-5" />
+                          Feed offline — tap to retry
+                        </button>
+                      )}
                       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex flex-col justify-between p-3">
                         <div className="flex justify-between items-center">
                           <span className="text-[10px] font-mono font-bold bg-slate-950/80 text-emerald-400 px-2 py-0.5 rounded border border-slate-800">

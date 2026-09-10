@@ -5,6 +5,7 @@ import type { MissionDefinition, ExpeditionDefinition, GameId } from '../mission
 import { missionSession } from '../missions/session';
 import { travelerState } from '../services/travelerState';
 import { soundEffects } from '../services/audioEffects';
+import { useModalA11y } from '../hooks/useModalA11y';
 
 interface MissionBoardProps {
   isOpen: boolean;
@@ -25,6 +26,9 @@ export const MissionBoard: React.FC<MissionBoardProps> = ({
   const [selectedMission, setSelectedMission] = useState<MissionDefinition>(MISSION_CATALOG[0]);
   const [selectedChoiceId, setSelectedChoiceId] = useState<string>(MISSION_CATALOG[0].choices[0]?.id || 'default');
   const [selectedExpedition, setSelectedExpedition] = useState<ExpeditionDefinition>(EXPEDITIONS[0]);
+
+  // Shared modal a11y: Escape to close, focus trap, focus restore
+  const { containerRef: dialogRef, dialogProps } = useModalA11y({ isOpen, onClose });
 
   if (!isOpen) return null;
 
@@ -60,7 +64,7 @@ export const MissionBoard: React.FC<MissionBoardProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 select-none">
-      <div className="relative w-full max-w-5xl bg-slate-950 border border-lime-400/40 rounded-3xl overflow-hidden shadow-2xl flex flex-col text-slate-100 max-h-[92vh]">
+      <div ref={dialogRef} {...dialogProps} className="relative w-full max-w-5xl bg-slate-950 border border-lime-400/40 rounded-3xl overflow-hidden shadow-2xl flex flex-col text-slate-100 max-h-[92vh] overflow-y-auto overscroll-contain">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 bg-slate-900/90 border-b border-slate-800">
           <div className="flex items-center gap-3">

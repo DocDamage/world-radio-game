@@ -3,6 +3,7 @@ import { Disc, Music, X, Volume2, Sparkles, Sliders, Trophy, Flame, Zap } from '
 import { soundEffects } from '../services/audioEffects';
 import { gamepadManager } from '../services/gamepadManager';
 import { MissionHUD } from './MissionHUD';
+import { useModalA11y } from '../hooks/useModalA11y';
 import type { MissionScenario, MissionResultPayload } from '../missions/types';
 import confetti from 'canvas-confetti';
 
@@ -310,13 +311,20 @@ export const RooftopBeatModal: React.FC<RooftopBeatModalProps> = ({
     onClose();
   };
 
+  // Shared modal a11y: Escape to close, focus trap, focus restore
+  const { containerRef: dialogRef, dialogProps } = useModalA11y({ isOpen, onClose });
+
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-lg flex items-center justify-center p-3 select-none">
-      <div className={`relative w-full max-w-4xl bg-slate-950 border rounded-3xl overflow-hidden shadow-2xl flex flex-col text-slate-100 transition-colors duration-300 ${
-        isFeverMode ? 'border-pink-500 shadow-pink-500/20 ring-2 ring-pink-500' : 'border-purple-400/40'
-      }`}>
+      <div
+        ref={dialogRef}
+        {...dialogProps}
+        className={`relative w-full max-w-4xl bg-slate-950 border rounded-3xl overflow-hidden shadow-2xl flex flex-col text-slate-100 transition-colors duration-300 max-h-[94vh] ${
+          isFeverMode ? 'border-pink-500 shadow-pink-500/20 ring-2 ring-pink-500' : 'border-purple-400/40'
+        }`}
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 bg-slate-900/90 border-b border-slate-800">
           <div className="flex items-center gap-3">

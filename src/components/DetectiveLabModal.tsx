@@ -3,6 +3,7 @@ import { X, Search, HelpCircle, CheckCircle2, Award, Zap } from 'lucide-react';
 import type { DetectiveState, RadioStation } from '../types';
 import { soundEffects } from '../services/audioEffects';
 import { MissionHUD } from './MissionHUD';
+import { useModalA11y } from '../hooks/useModalA11y';
 import type { MissionScenario, MissionResultPayload } from '../missions/types';
 import confetti from 'canvas-confetti';
 
@@ -436,11 +437,14 @@ export const DetectiveLabModal: React.FC<DetectiveLabModalProps> = ({
     confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
   };
 
+  // Shared modal a11y: Escape to close, focus trap, focus restore
+  const { containerRef: dialogRef, dialogProps } = useModalA11y({ isOpen, onClose });
+
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-slate-950/85 backdrop-blur-md">
-      <div className="relative w-full max-w-4xl bg-slate-900 border border-purple-500/40 rounded-3xl shadow-2xl overflow-hidden flex flex-col">
+      <div ref={dialogRef} {...dialogProps} className="relative w-full max-w-4xl bg-slate-900 border border-purple-500/40 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[94vh]">
         {/* Header */}
         <div className="p-4 border-b border-purple-500/30 flex items-center justify-between bg-gradient-to-r from-purple-950/90 to-slate-900">
           <div className="flex items-center gap-3">

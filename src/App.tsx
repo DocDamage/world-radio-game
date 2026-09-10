@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef, lazy } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
 import { 
   Radio, 
   Globe, 
@@ -137,6 +137,14 @@ export function App() {
   // Audio Recording State
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const [recordDuration, setRecordDuration] = useState<number>(0);
+  const [recordNotice, setRecordNotice] = useState<string>('');
+  const recordNoticeTimerRef = useRef<number | null>(null);
+
+  const showRecordNotice = useCallback((msg: string) => {
+    setRecordNotice(msg);
+    if (recordNoticeTimerRef.current) clearTimeout(recordNoticeTimerRef.current);
+    recordNoticeTimerRef.current = window.setTimeout(() => setRecordNotice(''), 5000);
+  }, []);
 
   // Modern Gamepad State
   const [gamepadConnected, setGamepadConnected] = useState<boolean>(false);
@@ -253,14 +261,18 @@ export function App() {
       soundEffects.playRadarPing(880, 0.15);
     } else {
       if (!activeStation) return;
-      streamRecorder.startRecording(activeStation.streamUrl, (sec) => setRecordDuration(sec)).then((started) => {
+      streamRecorder.startRecording(
+        activeStation.streamUrl,
+        (sec) => setRecordDuration(sec),
+        (reason) => showRecordNotice(reason)
+      ).then((started) => {
         if (started) {
           setIsRecording(true);
           soundEffects.playRadarPing(1200, 0.15);
         }
       });
     }
-  }, [activeStation]);
+  }, [activeStation, showRecordNotice]);
 
   // Save Gemini Key
   const handleSaveGeminiKey = (key: string) => {
@@ -671,7 +683,7 @@ export function App() {
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-slate-950 font-sans select-none text-slate-100">
       {/* Top Navigation Bar */}
-      <header className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-6 py-4 bg-gradient-to-b from-slate-950/90 via-slate-950/60 to-transparent pointer-events-auto">
+      <header className="absolute top-0 left-0 right-0 z-30 flex flex-wrap items-center justify-between gap-2 px-3 sm:px-6 py-3 sm:py-4 bg-gradient-to-b from-slate-950/90 via-slate-950/60 to-transparent pointer-events-auto safe-area-x">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-lime-400 to-emerald-500 flex items-center justify-center shadow-lg shadow-lime-500/20">
             <Radio className="w-5 h-5 text-slate-950" />
@@ -700,7 +712,7 @@ export function App() {
         </button>
 
         {/* Mode Switchers & Utilities */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap justify-end">
           {/* Explore / Globe Mode */}
           <button
             onClick={() => {
@@ -840,6 +852,15 @@ export function App() {
             : 'none'
         }}
       >
+        {/* Lazy-loaded 3D viewport: suspended chunk loads show a brief tuner */}
+        <Suspense
+          fallback={
+            <div className="w-full h-full flex flex-col items-center justify-center gap-3 select-none">
+              <Radio className="w-8 h-8 text-lime-400 animate-pulse" />
+              <div className="text-xs font-mono text-slate-400 animate-pulse">Tuning the airwaves…</div>
+            </div>
+          }
+        >
         {mode === 'explore' ? (
           <WorldGlobe
             stations={stations}
@@ -867,8 +888,11 @@ export function App() {
             />
           )
         )}
+        </Suspense>
       </main>
 
+      {/* Lazy world overlays: drawer, fox hunt, and detective lab */}
+      <Suspense fallback={null}>
       {/* City Drawer (Radio Garden / OpenRadio style side panel) */}
       <CityDrawer
         place={selectedPlace}
@@ -945,6 +969,7 @@ export function App() {
         missionScenario={missionScenario}
         onMissionResult={handleMissionResult}
       />
+      </Suspense>
 
       {/* Bottom Sticky Radio Player */}
       <RadioPlayerBar
@@ -960,6 +985,8 @@ export function App() {
         isRecording={isRecording}
         recordDuration={recordDuration}
         onToggleRecord={handleToggleRecord}
+        recordNotice={recordNotice}
+        isMysteryMode={mode === 'detective' && !detectiveState.revealed}
       />
 
       {/* Gamepad HUD Indicator */}
@@ -971,6 +998,8 @@ export function App() {
         />
       )}
 
+      {/* Lazy utility overlays: passport, palette, AI guide */}
+      <Suspense fallback={null}>
       {/* Passport Modal */}
       <PassportModal
         isOpen={isPassportOpen}
@@ -996,6 +1025,7 @@ export function App() {
         isOpen={isGuideOpen}
         onClose={() => setIsGuideOpen(false)}
       />
+      </Suspense>
 
       {/* DLSS 5 Neural Rendering Performance HUD */}
       <Dlss5Overlay
@@ -1004,6 +1034,8 @@ export function App() {
         configVersion={dlssConfigVersion}
       />
 
+      {/* Lazy command overlays: DLSS config, missions, monitor */}
+      <Suspense fallback={null}>
       {/* DLSS 5 Configuration Modal */}
       <Dlss5Modal
         isOpen={isDlssModalOpen}
@@ -1029,6 +1061,7 @@ export function App() {
         activeCountry={activeStation?.country || selectedPlace?.country || ''}
         activeStationName={activeStation?.name || ''}
       />
+      </Suspense>
 
       {/* Mission debrief (medal, rewards, expedition progress) */}
       {missionDebrief && (
@@ -1039,6 +1072,8 @@ export function App() {
         />
       )}
 
+      {/* Lazy mini-game modals: each loads its arcade chunk on first launch */}
+      <Suspense fallback={null}>
       {/* Full 2.5D Road Cycling Arcade Game */}
       <BicycleGameModal
         isOpen={activityMode === 'bike'}
@@ -1174,6 +1209,7 @@ export function App() {
         missionScenario={missionScenario}
         onMissionResult={handleMissionResult}
       />
+      </Suspense>
     </div>
   );
 }

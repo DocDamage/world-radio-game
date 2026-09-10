@@ -3,6 +3,7 @@ import { Mountain, Wind, X, Trophy, Sparkles } from 'lucide-react';
 import { soundEffects } from '../services/audioEffects';
 import { gamepadManager } from '../services/gamepadManager';
 import { MissionHUD } from './MissionHUD';
+import { useModalA11y } from '../hooks/useModalA11y';
 import type { MissionScenario, MissionResultPayload } from '../missions/types';
 
 interface AlpineDownhillModalProps {
@@ -402,11 +403,14 @@ export const AlpineDownhillModal: React.FC<AlpineDownhillModalProps> = ({
     onClose();
   };
 
+  // Shared modal a11y: Escape to close, focus trap, focus restore
+  const { containerRef: dialogRef, dialogProps } = useModalA11y({ isOpen, onClose });
+
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-lg flex items-center justify-center p-3 select-none">
-      <div className="relative w-full max-w-4xl bg-slate-950 border border-sky-400/40 rounded-3xl overflow-hidden shadow-2xl flex flex-col text-slate-100">
+      <div ref={dialogRef} {...dialogProps} className="relative w-full max-w-4xl bg-slate-950 border border-sky-400/40 rounded-3xl overflow-hidden shadow-2xl flex flex-col text-slate-100 max-h-[94vh]">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 bg-slate-900/90 border-b border-slate-800">
           <div className="flex items-center gap-3">

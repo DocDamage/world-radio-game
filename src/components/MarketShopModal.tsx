@@ -4,6 +4,7 @@ import { getCityMarketItems } from '../services/activityData';
 import { soundEffects } from '../services/audioEffects';
 import { gamepadManager } from '../services/gamepadManager';
 import { MissionHUD } from './MissionHUD';
+import { useModalA11y } from '../hooks/useModalA11y';
 import type { MissionScenario, MissionResultPayload } from '../missions/types';
 import type { BackpackItem, MarketItem } from '../types';
 import confetti from 'canvas-confetti';
@@ -128,6 +129,9 @@ export const MarketShopModal: React.FC<MarketShopModalProps> = ({
       setLastStepFeedback('');
     }
   }, [isOpen]);
+
+  // Shared modal a11y: Escape to close, focus trap, focus restore
+  const { containerRef: dialogRef, dialogProps } = useModalA11y({ isOpen, onClose });
 
   if (!isOpen) return null;
 
@@ -273,7 +277,7 @@ export const MarketShopModal: React.FC<MarketShopModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 select-none">
-      <div className="relative w-full max-w-xl bg-gradient-to-b from-slate-900 to-slate-950 border border-amber-400/40 rounded-3xl p-4 sm:p-6 shadow-2xl flex flex-col gap-4 text-slate-100 max-h-[88vh] overflow-y-auto overscroll-contain">
+      <div ref={dialogRef} {...dialogProps} className="relative w-full max-w-xl bg-gradient-to-b from-slate-900 to-slate-950 border border-amber-400/40 rounded-3xl p-4 sm:p-6 shadow-2xl flex flex-col gap-4 text-slate-100 max-h-[88vh] overflow-y-auto overscroll-contain">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
           <div className="flex items-center gap-3">

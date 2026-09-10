@@ -1,6 +1,7 @@
 import React from 'react';
 import { X, Radio, ExternalLink, Footprints, Flame, Heart, ShoppingBag, Fish, Bike, Ship, Camera, Disc, Mountain, Waves } from 'lucide-react';
 import type { RadioStation, Place, LocationEnvironment } from '../types';
+import { useModalA11y } from '../hooks/useModalA11y';
 
 interface CityDrawerProps {
   place: Place | null;
@@ -49,11 +50,16 @@ export const CityDrawer: React.FC<CityDrawerProps> = ({
   onStartDesertBuggy,
   onStartAlpineSki
 }) => {
+  // Shared modal a11y: Escape to close, focus trap, focus restore
+  const { containerRef: dialogRef, dialogProps } = useModalA11y<HTMLElement>({ isOpen, onClose });
+
   if (!isOpen || !place) return null;
 
   return (
     <aside
-      className="absolute top-20 left-6 bottom-28 z-40 w-96 max-w-[calc(100vw-3rem)] bg-slate-900/95 backdrop-blur-xl border border-lime-400/30 rounded-3xl p-5 shadow-2xl flex flex-col gap-3.5 text-slate-100 animate-in fade-in slide-in-from-left duration-250 select-none"
+      ref={dialogRef}
+      {...dialogProps}
+      className="absolute top-20 left-6 bottom-28 z-40 w-96 max-w-[calc(100vw-3rem)] bg-slate-900/95 backdrop-blur-xl border border-lime-400/30 rounded-3xl p-5 shadow-2xl flex flex-col gap-3.5 text-slate-100 animate-in fade-in slide-in-from-left duration-250 select-none overflow-y-auto overscroll-contain"
       aria-label="Stations in the selected place"
     >
       {/* City Header */}

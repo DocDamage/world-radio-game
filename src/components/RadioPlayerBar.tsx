@@ -32,6 +32,8 @@ interface RadioPlayerBarProps {
   recordDuration: number;
   onToggleRecord: () => void;
   isMysteryMode?: boolean;
+  /** Transient recording failure notice (CORS/offline), auto-cleared by App */
+  recordNotice?: string;
 }
 
 export const RadioPlayerBar: React.FC<RadioPlayerBarProps> = ({
@@ -47,7 +49,8 @@ export const RadioPlayerBar: React.FC<RadioPlayerBarProps> = ({
   isRecording,
   recordDuration,
   onToggleRecord,
-  isMysteryMode = false
+  isMysteryMode = false,
+  recordNotice = ''
 }) => {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [volume, setVolume] = useState<number>(() => {
@@ -157,7 +160,7 @@ export const RadioPlayerBar: React.FC<RadioPlayerBarProps> = ({
   }, [volume, isMuted]);
 
   return (
-    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 w-11/12 max-w-3xl bg-slate-900/90 backdrop-blur-xl border border-lime-400/30 rounded-3xl p-3 px-5 shadow-2xl shadow-black/80 text-slate-100 flex items-center justify-between gap-4">
+    <div className="absolute bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-30 w-[95%] sm:w-11/12 max-w-3xl bg-slate-900/90 backdrop-blur-xl border border-lime-400/30 rounded-3xl p-2.5 sm:p-3 px-4 sm:px-5 shadow-2xl shadow-black/80 text-slate-100 flex flex-wrap items-center justify-center sm:justify-between gap-2 sm:gap-4 safe-area-bottom safe-area-x">
       <audio
         ref={audioRef}
         onLoadStart={() => {
@@ -336,6 +339,18 @@ export const RadioPlayerBar: React.FC<RadioPlayerBarProps> = ({
               </>
             )}
           </button>
+        )}
+
+        {/* Recording failure notice (station blocks capture / offline) */}
+        {recordNotice && (
+          <span
+            role="status"
+            className="hidden sm:flex items-center gap-1.5 text-[10px] font-mono text-rose-300 bg-rose-950/80 border border-rose-500/40 px-2.5 py-1.5 rounded-xl max-w-[240px]"
+            title={recordNotice}
+          >
+            <AlertCircle className="w-3.5 h-3.5 shrink-0 text-rose-400" />
+            <span className="truncate">{recordNotice}</span>
+          </span>
         )}
 
         {/* Direct Stream Download Button */}

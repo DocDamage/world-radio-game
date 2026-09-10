@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Key, Sparkles, Compass, HelpCircle, Bot, X } from 'lucide-react';
 import type { RadioStation } from '../types';
 import { askGeminiGuide } from '../services/geminiApi';
+import { useModalA11y } from '../hooks/useModalA11y';
 
 interface GeminiGuidePanelProps {
   apiKey: string;
@@ -38,10 +39,17 @@ export const GeminiGuidePanel: React.FC<GeminiGuidePanelProps> = ({
     setLoading(false);
   };
 
+  // Shared modal a11y: Escape to close, focus trap, focus restore
+  const { containerRef: dialogRef, dialogProps } = useModalA11y({ isOpen, onClose });
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed top-20 right-6 z-40 w-96 bg-slate-900/95 backdrop-blur-md border border-cyan-500/40 rounded-3xl p-5 shadow-2xl text-slate-100 flex flex-col gap-4 animate-in fade-in slide-in-from-right duration-200">
+    <div
+      ref={dialogRef}
+      {...dialogProps}
+      className="fixed top-20 right-6 z-40 w-96 max-w-[calc(100vw-3rem)] bg-slate-900/95 backdrop-blur-md border border-cyan-500/40 rounded-3xl p-5 shadow-2xl text-slate-100 flex flex-col gap-4 animate-in fade-in slide-in-from-right duration-200"
+    >
       {/* Header */}
       <div className="flex items-center justify-between border-b border-slate-800 pb-3">
         <div className="flex items-center gap-2">

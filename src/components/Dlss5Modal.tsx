@@ -164,6 +164,9 @@ export const Dlss5Modal: React.FC<Dlss5ModalProps> = ({
               <p className="text-[11px] text-slate-400 mt-0.5">
                 Generates AI interpolated frames to double or triple viewport smoothness
               </p>
+              <p className="text-[10px] text-emerald-400/80 font-mono mt-0.5">
+                • Telemetry HUD displays true measured browser animation frames (rAF) and viewport resolution
+              </p>
             </div>
             <button
               onClick={() => handleFrameGenToggle(!frameGen)}

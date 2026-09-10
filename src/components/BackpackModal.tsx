@@ -112,7 +112,14 @@ export const BackpackModal: React.FC<BackpackModalProps> = ({
                 >
                   <div>
                     <div className="flex items-start justify-between">
-                      <span className="text-3xl p-1 bg-slate-950 rounded-xl border border-slate-800 group-hover:scale-110 transition">{item.icon}</span>
+                      {item.photoUrl ? (
+                        <div className="relative w-12 h-10 rounded-xl overflow-hidden border border-lime-400/40 group-hover:scale-105 transition shrink-0 shadow bg-slate-950">
+                          <img src={item.photoUrl} alt={item.name} className="w-full h-full object-cover" />
+                          <span className="absolute bottom-0 right-0 text-[10px] bg-slate-950/80 px-1 rounded-tl">{item.icon}</span>
+                        </div>
+                      ) : (
+                        <span className="text-3xl p-1 bg-slate-950 rounded-xl border border-slate-800 group-hover:scale-110 transition">{item.icon}</span>
+                      )}
                       <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
                         <button
                           onClick={() => handleSell(item)}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Compass, Footprints, ExternalLink, Navigation, Bike, Ship, Fish, ShoppingBag, Camera, Backpack, Disc, Flame, Mountain, Waves } from 'lucide-react';
 import type { RadioStation, LocationEnvironment } from '../types';
+import { inputManager } from '../services/inputManager';
 
 interface StreetWalkerProps {
   station: RadioStation;
@@ -90,6 +91,7 @@ export const StreetWalker: React.FC<StreetWalkerProps> = ({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (!inputManager.canHandleStreetWalk()) return;
 
       if (e.key === 'w' || e.key === 'W' || e.key === 'ArrowUp') {
         handleWalk('forward');

@@ -7,6 +7,7 @@ import { useModalA11y } from '../hooks/useModalA11y';
 import type { MissionScenario, MissionResultPayload } from '../missions/types';
 import type { BackpackItem } from '../types';
 import { celebrate } from '../services/celebrate';
+import { resolveLocationEnvironment } from '../services/activityData';
 
 interface PhotoSnapModalProps {
   isOpen: boolean;
@@ -132,28 +133,109 @@ export const PhotoSnapModal: React.FC<PhotoSnapModalProps> = ({
     ctx.fill();
     ctx.restore();
 
-    // 3. City Architectural Skyline Silhouettes
+    // 3. Biome-Reactive Scenic Skyline / Landscape Silhouettes
+    const env = resolveLocationEnvironment(cityName, countryName, coords.lat, coords.lng);
     const zoomScale = focalLength / 35; // 24mm (0.68x) to 85mm (2.4x)
-    ctx.fillStyle = filter === 'vintage' ? '#291804' : filter === 'bw' ? '#18181b' : '#090d16';
+    const baseColor = filter === 'vintage' ? '#291804' : filter === 'bw' ? '#18181b' : '#090d16';
+    ctx.fillStyle = baseColor;
 
-    const bldCount = 18;
-    const bldWidth = (W / bldCount) * (1 / Math.min(1.5, zoomScale));
-    for (let i = 0; i < bldCount + 4; i++) {
-      const hSeed = Math.sin(i * 1.7) * 0.5 + 0.5;
-      const bHeight = 180 + hSeed * 240 * zoomScale;
-      const bx = i * (bldWidth * 0.95) - 40;
-      const by = H * 0.72 - bHeight;
+    if (env.biome === 'alpine') {
+      // Mountain silhouette with jagged snowy peaks
+      ctx.beginPath();
+      ctx.moveTo(0, H * 0.72);
+      ctx.lineTo(0, H * 0.52);
+      ctx.lineTo(W * 0.18, H * 0.26 / zoomScale + 120);
+      ctx.lineTo(W * 0.32, H * 0.48);
+      ctx.lineTo(W * 0.52, H * 0.18 / zoomScale + 110);
+      ctx.lineTo(W * 0.7, H * 0.42);
+      ctx.lineTo(W * 0.85, H * 0.24 / zoomScale + 120);
+      ctx.lineTo(W, H * 0.46);
+      ctx.lineTo(W, H * 0.72);
+      ctx.closePath();
+      ctx.fill();
 
-      ctx.fillRect(bx, by, bldWidth, bHeight + 100);
+      // Mountain snow caps
+      ctx.fillStyle = filter === 'neon' ? '#f472b6' : filter === 'vintage' ? '#fef08a' : '#f1f5f9';
+      const snowPeaks: [number, number, number][] = [
+        [W * 0.18, H * 0.26 / zoomScale + 120, 42],
+        [W * 0.52, H * 0.18 / zoomScale + 110, 56],
+        [W * 0.85, H * 0.24 / zoomScale + 120, 48]
+      ];
+      for (const [sx, sy, size] of snowPeaks) {
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(sx - size, sy + size * 0.85);
+        ctx.lineTo(sx + size, sy + size * 0.85);
+        ctx.closePath();
+        ctx.fill();
+      }
+    } else if (env.biome === 'desert') {
+      // Sweeping sand dunes with warm haze
+      const duneGrad = ctx.createLinearGradient(0, H * 0.38, 0, H * 0.72);
+      duneGrad.addColorStop(0, filter === 'vintage' ? '#78350f' : '#b45309');
+      duneGrad.addColorStop(1, filter === 'vintage' ? '#451a03' : '#78350f');
+      ctx.fillStyle = duneGrad;
+      ctx.beginPath();
+      ctx.moveTo(0, H * 0.72);
+      ctx.quadraticCurveTo(W * 0.25, H * 0.4, W * 0.52, H * 0.56);
+      ctx.quadraticCurveTo(W * 0.78, H * 0.44, W, H * 0.58);
+      ctx.lineTo(W, H * 0.72);
+      ctx.closePath();
+      ctx.fill();
 
-      // Lit windows
-      if (filter !== 'bw') {
-        ctx.fillStyle = Math.random() > 0.4 ? 'rgba(253, 224, 71, 0.75)' : 'rgba(244, 114, 182, 0.6)';
-        for (let wy = by + 20; wy < H * 0.7; wy += 35) {
-          ctx.fillRect(bx + 12, wy, 8, 14);
-          ctx.fillRect(bx + bldWidth - 20, wy, 8, 14);
+      // Distant palm silhouettes
+      ctx.fillStyle = baseColor;
+      for (const px of [W * 0.2, W * 0.82]) {
+        ctx.fillRect(px, H * 0.48, 6, 60);
+        ctx.beginPath();
+        ctx.arc(px + 3, H * 0.46, 20, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (env.biome === 'coastal') {
+      // Ocean horizon and maritime headlands
+      ctx.fillStyle = filter === 'neon' ? '#312e81' : '#0369a1';
+      ctx.fillRect(0, H * 0.52, W, H * 0.2);
+
+      // Crashing surf swells
+      ctx.strokeStyle = filter === 'neon' ? '#38bdf8' : '#e0f2fe';
+      ctx.lineWidth = 2.5;
+      for (let wy = H * 0.55; wy < H * 0.72; wy += 24) {
+        ctx.beginPath();
+        ctx.moveTo(0, wy);
+        for (let wx = 0; wx <= W; wx += 60) {
+          ctx.quadraticCurveTo(wx + 15, wy - 7, wx + 30, wy);
+          ctx.quadraticCurveTo(wx + 45, wy + 7, wx + 60, wy);
         }
-        ctx.fillStyle = filter === 'vintage' ? '#291804' : '#090d16';
+        ctx.stroke();
+      }
+
+      // Coastal lighthouse / headland
+      ctx.fillStyle = baseColor;
+      ctx.fillRect(W * 0.82, H * 0.38, 22, 110);
+      ctx.beginPath();
+      ctx.arc(W * 0.82 + 11, H * 0.36, 16, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      // City Architectural Skyline Silhouettes
+      const bldCount = 18;
+      const bldWidth = (W / bldCount) * (1 / Math.min(1.5, zoomScale));
+      for (let i = 0; i < bldCount + 4; i++) {
+        const hSeed = Math.sin(i * 1.7) * 0.5 + 0.5;
+        const bHeight = 180 + hSeed * 240 * zoomScale;
+        const bx = i * (bldWidth * 0.95) - 40;
+        const by = H * 0.72 - bHeight;
+
+        ctx.fillStyle = baseColor;
+        ctx.fillRect(bx, by, bldWidth, bHeight + 100);
+
+        // Lit windows
+        if (filter !== 'bw') {
+          ctx.fillStyle = Math.random() > 0.4 ? 'rgba(253, 224, 71, 0.75)' : 'rgba(244, 114, 182, 0.6)';
+          for (let wy = by + 20; wy < H * 0.7; wy += 35) {
+            ctx.fillRect(bx + 12, wy, 8, 14);
+            ctx.fillRect(bx + bldWidth - 20, wy, 8, 14);
+          }
+        }
       }
     }
 

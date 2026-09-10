@@ -11,6 +11,8 @@ export interface RadioStation {
   geo_lat: number;
   geo_long: number;
   tags?: string;
+  codec?: string;
+  bitrate?: number;
 }
 
 export interface Place {

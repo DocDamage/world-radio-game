@@ -605,8 +605,8 @@ export function getCityMarketItems(
     };
   }
 
-  // Tokyo
-  if (city.includes('tokyo') || country.includes('japan')) {
+  // Tokyo (strictly Tokyo)
+  if (city.includes('tokyo')) {
     return {
       marketName: 'Tsukiji & Shibuya Street Bazaar',
       items: [
@@ -618,8 +618,21 @@ export function getCityMarketItems(
     };
   }
 
-  // Paris
-  if (city.includes('paris') || country.includes('france')) {
+  // Japan (Regional cities)
+  if (country.includes('japan')) {
+    return {
+      marketName: `${cityName || 'Regional'} Shotengai Market`,
+      items: [
+        { id: 'jp-bento', name: 'Regional Ekiben Bento Box', category: 'food', icon: '🍱', priceCoins: 35, description: `Locally prepared seasoned delicacies from the regional kitchens of ${cityName || 'Japan'}.` },
+        { id: 'jp-tea', name: 'Sencha Green Tea Leaves', category: 'food', icon: '🍵', priceCoins: 25, description: 'Freshly harvested stone-ground green tea leaves with delicate aroma.' },
+        { id: 'jp-vinyl', name: 'Traditional Koto & Shamisen LP', category: 'vinyl', icon: '💿', priceCoins: 100, description: 'Masterful analog acoustic recordings of Japanese classical strings.' },
+        { id: 'jp-kokeshi', name: 'Hand-Carved Wooden Kokeshi Doll', category: 'souvenir', icon: '🎎', priceCoins: 55, description: 'Traditional artisanal wooden doll painted with graceful floral motifs.' }
+      ]
+    };
+  }
+
+  // Paris (strictly Paris)
+  if (city.includes('paris')) {
     return {
       marketName: 'Marché aux Puces de Saint-Ouen',
       items: [
@@ -631,8 +644,21 @@ export function getCityMarketItems(
     };
   }
 
-  // London
-  if (city.includes('london') || country.includes('kingdom')) {
+  // France (Regional cities)
+  if (country.includes('france')) {
+    return {
+      marketName: `Marché Artisanal de ${cityName || 'Province'}`,
+      items: [
+        { id: 'fr-fromage', name: 'Artisanal Chevre & Sourdough', category: 'food', icon: '🥖', priceCoins: 28, description: `Locally cured cheese and stone-baked crusty bread from ${cityName || 'the region'}.` },
+        { id: 'fr-confiture', name: 'Wild Lavender Blossom Honey', category: 'food', icon: '🍯', priceCoins: 24, description: 'Pure aromatic honey harvested from sunlit French lavender hills.' },
+        { id: 'fr-vinyl', name: 'French Accordion Chanson LP', category: 'vinyl', icon: '💿', priceCoins: 95, description: 'Nostalgic analog waltzes and street accordion recordings.' },
+        { id: 'fr-ceramic', name: 'Glazed Provençal Ceramic Bowl', category: 'souvenir', icon: '🏺', priceCoins: 60, description: 'Kiln-fired earthenware pottery with traditional sunny yellow glaze.' }
+      ]
+    };
+  }
+
+  // London (strictly London)
+  if (city.includes('london')) {
     return {
       marketName: 'Borough Market & Portobello Crates',
       items: [
@@ -644,8 +670,21 @@ export function getCityMarketItems(
     };
   }
 
-  // New York
-  if (city.includes('new york') || country.includes('united states')) {
+  // UK & Britain (Regional cities)
+  if (country.includes('kingdom') || country.includes('britain') || country.includes('scotland') || country.includes('wales')) {
+    return {
+      marketName: `${cityName || 'High Street'} Town Fair`,
+      items: [
+        { id: 'uk-scones', name: 'Warm Scones with Clotted Cream', category: 'food', icon: '🫖', priceCoins: 25, description: 'Freshly baked buttery scones served with strawberry preserves.' },
+        { id: 'uk-pastry', name: 'Traditional Savory Baked Pasty', category: 'food', icon: '🥟', priceCoins: 30, description: 'Golden crimped crust packed with seasoned beef and root vegetables.' },
+        { id: 'uk-vinyl', name: 'British Folk & Merseybeat 45', category: 'vinyl', icon: '💿', priceCoins: 95, description: 'Vintage analog pressing capturing quintessential British guitar harmonies.' },
+        { id: 'uk-tartan', name: 'Woven Wool Pocket Tartan', category: 'souvenir', icon: '🧣', priceCoins: 55, description: 'Hand-woven lambswool keepsake in traditional heritage weave.' }
+      ]
+    };
+  }
+
+  // New York City (strictly NYC)
+  if (city.includes('new york') || city.includes('nyc') || city.includes('manhattan') || city.includes('brooklyn')) {
     return {
       marketName: 'Greenwich Village Flea & Deli',
       items: [
@@ -653,6 +692,19 @@ export function getCityMarketItems(
         { id: 'ny-pastrami', name: 'Warm Pastrami on Rye', category: 'food', icon: '🥪', priceCoins: 55, description: 'Cured spiced beef piled high with spicy brown mustard.' },
         { id: 'ny-vinyl', name: 'Blue Note Hard Bop LP', category: 'vinyl', icon: '💿', priceCoins: 130, description: 'Sensational brass grooves recorded late night at Rudy Van Gelder studio.' },
         { id: 'ny-cab', name: 'Vintage Yellow Taxi Model', category: 'souvenir', icon: '🚕', priceCoins: 45, description: 'Iconic Checker Cab model with working doors and headlights.' }
+      ]
+    };
+  }
+
+  // United States (Regional cities)
+  if (country.includes('united states') || country.includes('usa')) {
+    return {
+      marketName: `${cityName || 'Downtown'} Heritage Farmers Market`,
+      items: [
+        { id: 'us-cider', name: 'Warm Spiced Orchard Apple Cider', category: 'food', icon: '🍎', priceCoins: 22, description: 'Freshly pressed sweet cider mulled with whole cinnamon and allspice.' },
+        { id: 'us-pie', name: 'Cast-Iron Skillet Pecan Tart', category: 'food', icon: '🥧', priceCoins: 28, description: 'Rich caramelized dessert slice baked with roasted local pecans.' },
+        { id: 'us-vinyl', name: 'American Roots & Blues Vinyl 45', category: 'vinyl', icon: '💿', priceCoins: 100, description: 'Warm analog pressing of raw acoustic slide guitar and harmonica.' },
+        { id: 'us-enamel', name: 'Speckled Enamel Campfire Mug', category: 'souvenir', icon: '☕', priceCoins: 40, description: 'Durable steel campfire mug with vintage speckled finish.' }
       ]
     };
   }

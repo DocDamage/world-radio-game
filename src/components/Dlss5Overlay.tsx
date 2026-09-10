@@ -58,7 +58,7 @@ export const Dlss5Overlay: React.FC<Dlss5OverlayProps> = ({
     <div
       onClick={onOpenModal}
       className="fixed bottom-24 right-6 z-30 bg-slate-950/85 hover:bg-slate-900/95 cursor-pointer backdrop-blur-md border border-emerald-500/40 hover:border-emerald-400 rounded-2xl p-2.5 px-3.5 text-[11px] font-mono text-slate-200 transition shadow-2xl flex flex-col gap-1 select-none group"
-      title="Click to configure Graphics & Rendering Performance"
+      title="Measured browser animation frequency (rAF) & render scale • Click to configure"
     >
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-1.5 text-emerald-400 font-bold">

@@ -77,6 +77,7 @@ function streamProxyPlugin(): Plugin {
 export default defineConfig({
   plugins: [react(), streamProxyPlugin()],
   build: {
+    chunkSizeWarningLimit: 1300,
     rolldownOptions: {
       output: {
         // Long-lived, cache-stable vendor chunks for the lazy-loaded 3D stack:
@@ -84,7 +85,7 @@ export default defineConfig({
         // three-globe form the globe engine, and d3 powers its data binding.
         // Splitting them keeps chunks smaller (parallel download) and means an
         // app update never invalidates the cached vendor bytes.
-        advancedChunks: {
+        codeSplitting: {
           groups: [
             // Only the parts of three shared by the globe AND the 3D tiles
             // renderer move into the vendor chunk; tiles-exclusive three

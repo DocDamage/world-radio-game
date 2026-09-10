@@ -41,6 +41,7 @@ import { MissionResults, type MissionDebriefData } from './components/MissionRes
 import type { GameId, MissionScenario, MissionResultPayload } from './missions/types';
 import { isGlobeTilesKeyUsable, type GlobeTilesStatus } from './services/globeTiles';
 import { VisualCueToast } from './components/VisualCueToast';
+import { generateDetectiveClue } from './services/detectiveClues';
 
 // Code-split heavy 3D Globe, Street View, and Mini-Game Modals to optimize bundle size
 const WorldGlobe = lazy(() => import('./components/WorldGlobe').then(m => ({ default: m.WorldGlobe })));
@@ -126,9 +127,17 @@ export function App() {
   const favorites = traveler.favorites;
   const highScores = traveler.highScores;
 
-  // Gemini API Key (saved in localStorage)
+  // Gemini API Key (session-first to avoid retaining personal keys indefinitely in localStorage)
   const [geminiApiKey, setGeminiApiKey] = useState<string>(() => {
-    return localStorage.getItem('world_radio_gemini_key') || '';
+    try {
+      return (
+        (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('world_radio_gemini_key') : null) ||
+        (typeof localStorage !== 'undefined' ? localStorage.getItem('world_radio_gemini_key') : null) ||
+        ''
+      );
+    } catch {
+      return '';
+    }
   });
 
   // Google Photorealistic 3D Tiles (Map Tiles API key stored locally, like the Gemini key)
@@ -345,10 +354,19 @@ export function App() {
     }
   }, [activeStation, showRecordNotice]);
 
-  // Save Gemini Key
+  // Save Gemini Key (sessionStorage to protect user personal key)
   const handleSaveGeminiKey = (key: string) => {
     setGeminiApiKey(key);
-    localStorage.setItem('world_radio_gemini_key', key);
+    try {
+      if (key) {
+        sessionStorage.setItem('world_radio_gemini_key', key);
+      } else {
+        sessionStorage.removeItem('world_radio_gemini_key');
+      }
+      localStorage.removeItem('world_radio_gemini_key');
+    } catch {
+      // Ignore storage errors in restricted contexts
+    }
   };
 
   // Toggle Favorite (single source of truth: travelerState store)
@@ -537,11 +555,9 @@ export function App() {
       score: detectiveState.score
     });
 
-    // Mystery isolation: the opening clue must never name the target city or
-    // country — the player deduces it from street view + forensic clues only
-    setMysteryClue(
-      'An uncataloged broadcast is on the air. Study the street view, the forensic signal readouts, and the radio metadata to pinpoint the transmitter city on the map.'
-    );
+    // Mystery isolation: dynamically generate forensic clues adapting to the station's
+    // coordinates, carrier specs, and mission scenario without leaking city/country names
+    setMysteryClue(generateDetectiveClue(randomStation, missionScenario));
 
     setIsCityDrawerOpen(false);
     setMode('detective');
@@ -662,7 +678,7 @@ export function App() {
 
   // Global Keyboard Shortcuts
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    // Open command palette with Ctrl+K, Cmd+K, or /
+    // Open command palette with Ctrl+K or Cmd+K
     if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
       e.preventDefault();
       setIsPaletteOpen(prev => !prev);
@@ -670,6 +686,26 @@ export function App() {
     }
 
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+      return;
+    }
+
+    if (e.key === 'Escape') {
+      setIsCityDrawerOpen(false);
+      setIsPassportOpen(false);
+      setIsGuideOpen(false);
+      setIsPaletteOpen(false);
+      setIsMissionBoardOpen(false);
+      setIsWorldMonitorOpen(false);
+      setIsSettingsOpen(false);
+      if (mode === 'street' && !inputManager.isGameActive() && inputManager.getTopModal() === null) {
+        setMode('explore');
+      }
+      return;
+    }
+
+    // Guard all explore-level shortcuts (/, Space, W, S, R, F, Arrows)
+    // Never allow them to fire during active mini-games, street walk mode, or open modals!
+    if (!inputManager.canHandleGlobalShortcuts()) {
       return;
     }
 
@@ -690,20 +726,12 @@ export function App() {
       handleToggleRecord();
     } else if (e.key === 'f' || e.key === 'F') {
       if (activeStation) handleToggleFavorite(activeStation);
-    } else if (e.key === 'Escape') {
-      setIsCityDrawerOpen(false);
-      setIsPassportOpen(false);
-      setIsGuideOpen(false);
-      setIsPaletteOpen(false);
-      setIsMissionBoardOpen(false);
-      setIsWorldMonitorOpen(false);
-      setIsSettingsOpen(false);
     } else if (e.key === 'ArrowRight') {
       handleNextStation();
     } else if (e.key === 'ArrowLeft') {
       handlePrevStation();
     }
-  }, [activeStation, handleNextStation, handlePrevStation, handleRandomStation, handleToggleFavorite, handleToggleRecord]);
+  }, [activeStation, handleNextStation, handlePrevStation, handleRandomStation, handleToggleFavorite, handleToggleRecord, mode]);
 
   // Modern Gamepad GTA-style controls integration
   useEffect(() => {

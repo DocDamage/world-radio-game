@@ -11,15 +11,26 @@ export class RadioStreamRecorder {
   /**
    * Fetch candidates for a stream URL, in priority order.
    *
-   * The `/stream-proxy` middleware only exists on the local vite dev server,
-   * so in production builds we always try the direct stream URL first (many
-   * stations send permissive CORS headers) and only fall back to the proxy
-   * path, which succeeds when the app happens to be deployed behind one.
+   * In development, the local Vite dev server provides `/stream-proxy`.
+   * In production, we first attempt the direct stream URL (many stations send permissive
+   * CORS headers). If configured, custom proxy URL `import.meta.env.VITE_STREAM_PROXY_URL`
+   * is queried, followed by `/stream-proxy` if hosted behind a proxy container.
    */
   private buildFetchCandidates(streamUrl: string): string[] {
-    const proxyUrl = `/stream-proxy?url=${encodeURIComponent(streamUrl)}`;
-    const isDev = import.meta.env.DEV;
-    return isDev ? [proxyUrl, streamUrl] : [streamUrl, proxyUrl];
+    const encoded = encodeURIComponent(streamUrl);
+    const localProxyUrl = `/stream-proxy?url=${encoded}`;
+    const customProxyBase = typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_STREAM_PROXY_URL;
+    const customProxyUrl = customProxyBase ? `${customProxyBase}${customProxyBase.includes('?') ? '&' : '?'}url=${encoded}` : null;
+    const isDev = Boolean(typeof import.meta !== 'undefined' && (import.meta as any).env?.DEV);
+
+    if (isDev) {
+      return customProxyUrl ? [localProxyUrl, customProxyUrl, streamUrl] : [localProxyUrl, streamUrl];
+    }
+
+    const candidates = [streamUrl];
+    if (customProxyUrl) candidates.push(customProxyUrl);
+    candidates.push(localProxyUrl);
+    return candidates;
   }
 
   public async startRecording(
@@ -38,8 +49,11 @@ export class RadioStreamRecorder {
       if (started) return true;
     }
 
+    const isDev = Boolean(typeof import.meta !== 'undefined' && (import.meta as any).env?.DEV);
     onError?.(
-      'Recording unavailable for this stream — the station blocks direct capture outside the app dev environment. Try another station.'
+      isDev
+        ? 'Recording failed — stream connection was refused or audio format is unsupported. Try another station.'
+        : 'Recording unavailable for this stream — the station blocks direct CORS capture outside a configured stream proxy. Try another station.'
     );
     return false;
   }

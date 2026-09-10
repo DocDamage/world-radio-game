@@ -1029,7 +1029,7 @@ export function App() {
       {/* Full 2.5D Road Cycling Arcade Game */}
       <BicycleGameModal
         isOpen={activityMode === 'bike'}
-        onClose={() => setActivityMode('none')}
+        onClose={() => { setActivityMode('none'); setMissionScenario(null); }}
         cityName={activeStation?.place || selectedPlace?.title || 'City'}
         countryName={activeStation?.country || selectedPlace?.country || 'World'}
         biome={locationEnvironment.biome}
@@ -1043,7 +1043,7 @@ export function App() {
       {/* Full Naval Watercraft Navigation Simulator */}
       <BoatingGameModal
         isOpen={activityMode === 'boat'}
-        onClose={() => setActivityMode('none')}
+        onClose={() => { setActivityMode('none'); setMissionScenario(null); }}
         cityName={activeStation?.place || selectedPlace?.title || 'Port'}
         countryName={activeStation?.country || selectedPlace?.country || 'World'}
         waterwayName={locationEnvironment.waterwayName || 'Waterfront Harbor'}

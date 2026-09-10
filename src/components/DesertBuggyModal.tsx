@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Flame, X, Trophy, Wind, Sparkles } from 'lucide-react';
 import { soundEffects } from '../services/audioEffects';
+import { settingsStore } from '../services/settingsStore';
 import { gamepadManager } from '../services/gamepadManager';
 import { MissionHUD } from './MissionHUD';
 import { useModalA11y } from '../hooks/useModalA11y';
@@ -403,8 +404,9 @@ export const DesertBuggyModal: React.FC<DesertBuggyModalProps> = ({
       rctx.save();
       // Screen shake on crash
       if (shakeRef.current > 0) {
-        const sx = (Math.random() - 0.5) * shakeRef.current;
-        const sy = (Math.random() - 0.5) * shakeRef.current;
+        const scale = settingsStore.getShakeScale();
+        const sx = (Math.random() - 0.5) * shakeRef.current * scale;
+        const sy = (Math.random() - 0.5) * shakeRef.current * scale;
         rctx.translate(sx, sy);
       }
       rctx.clearRect(-10, -10, W + 20, H + 20);

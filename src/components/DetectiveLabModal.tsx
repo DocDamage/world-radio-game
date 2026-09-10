@@ -5,7 +5,7 @@ import { soundEffects } from '../services/audioEffects';
 import { MissionHUD } from './MissionHUD';
 import { useModalA11y } from '../hooks/useModalA11y';
 import type { MissionScenario, MissionResultPayload } from '../missions/types';
-import confetti from 'canvas-confetti';
+import { celebrate } from '../services/celebrate';
 
 interface DetectiveLabModalProps {
   isOpen: boolean;
@@ -436,7 +436,7 @@ export const DetectiveLabModal: React.FC<DetectiveLabModalProps> = ({
 
     onGuessCoords(selectedPin);
     soundEffects.playTriumphChime(0.4);
-    confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+    celebrate({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
   };
 
   // Shared modal a11y: Escape to close, focus trap, focus restore

@@ -5,7 +5,7 @@ import { soundEffects } from '../services/audioEffects';
 import { MissionHUD } from './MissionHUD';
 import { useModalA11y } from '../hooks/useModalA11y';
 import type { MissionScenario, MissionResultPayload } from '../missions/types';
-import confetti from 'canvas-confetti';
+import { celebrate } from '../services/celebrate';
 
 interface SignalHuntModalProps {
   isOpen: boolean;
@@ -196,7 +196,7 @@ export const SignalHuntModal: React.FC<SignalHuntModalProps> = ({
     if (distanceMeters < 50) {
       setIsBeaconUnlocked(true);
       soundEffects.playTriumphChime(0.5);
-      confetti({ particleCount: 120, spread: 70, origin: { y: 0.6 } });
+      celebrate({ particleCount: 120, spread: 70, origin: { y: 0.6 } });
       onClaimVictory();
       settleMission(); // mission settles exactly once, on transmitter capture
     }

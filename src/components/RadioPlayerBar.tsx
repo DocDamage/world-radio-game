@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import type { RadioStation } from '../types';
 import { soundEffects } from '../services/audioEffects';
+import { settingsStore } from '../services/settingsStore';
 
 interface RadioPlayerBarProps {
   station: RadioStation | null;
@@ -53,10 +54,12 @@ export const RadioPlayerBar: React.FC<RadioPlayerBarProps> = ({
   recordNotice = ''
 }) => {
   const audioRef = useRef<HTMLAudioElement>(null);
-  const [volume, setVolume] = useState<number>(() => {
-    const saved = localStorage.getItem('world_radio_volume');
-    return saved ? parseFloat(saved) : 0.8;
-  });
+  // Radio volume lives in the shared settings store so the Accessibility &
+  // Sound dialog and this player bar stay in sync.
+  const [volume, setVolume] = useState<number>(() => settingsStore.getState().radioVolume);
+  useEffect(() => {
+    return settingsStore.subscribe(() => setVolume(settingsStore.getState().radioVolume));
+  }, []);
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [streamError, setStreamError] = useState<boolean>(false);
   const [isLoadingStream, setIsLoadingStream] = useState<boolean>(false);
@@ -117,11 +120,10 @@ export const RadioPlayerBar: React.FC<RadioPlayerBarProps> = ({
     }
   }, [isPlaying]);
 
-  // Sync and persist volume
+  // Sync volume to the audio element (the settings store persists it)
   useEffect(() => {
     if (!audioRef.current) return;
     audioRef.current.volume = isMuted ? 0 : volume;
-    localStorage.setItem('world_radio_volume', volume.toString());
   }, [volume, isMuted]);
 
   const handleRetryStream = () => {
@@ -383,7 +385,9 @@ export const RadioPlayerBar: React.FC<RadioPlayerBarProps> = ({
             step="0.05"
             value={isMuted ? 0 : volume}
             onChange={e => {
-              setVolume(parseFloat(e.target.value));
+              const val = parseFloat(e.target.value);
+              setVolume(val);
+              settingsStore.update({ radioVolume: val });
               setIsMuted(false);
             }}
             className="w-16 accent-lime-400 cursor-pointer h-1 bg-slate-700 rounded-lg"

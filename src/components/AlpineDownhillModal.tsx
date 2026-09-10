@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Mountain, Wind, X, Trophy, Sparkles } from 'lucide-react';
 import { soundEffects } from '../services/audioEffects';
+import { settingsStore } from '../services/settingsStore';
 import { gamepadManager } from '../services/gamepadManager';
 import { MissionHUD } from './MissionHUD';
 import { useModalA11y } from '../hooks/useModalA11y';
@@ -356,7 +357,8 @@ export const AlpineDownhillModal: React.FC<AlpineDownhillModalProps> = ({
     function renderFrame(rctx: CanvasRenderingContext2D, W: number, H: number, time: number) {
       rctx.save();
       if (shakeRef.current > 0) {
-        rctx.translate((Math.random() - 0.5) * shakeRef.current, (Math.random() - 0.5) * shakeRef.current);
+        const scale = settingsStore.getShakeScale();
+        rctx.translate((Math.random() - 0.5) * shakeRef.current * scale, (Math.random() - 0.5) * shakeRef.current * scale);
       }
       rctx.clearRect(-10, -10, W + 20, H + 20);
 

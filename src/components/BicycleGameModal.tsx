@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Bike, Bell, X, Zap, Wind, Trophy, Sparkles, AlertTriangle, RotateCcw } from 'lucide-react';
-import confetti from 'canvas-confetti';
+import { celebrate } from '../services/celebrate';
+import { settingsStore } from '../services/settingsStore';
 import { soundEffects } from '../services/audioEffects';
 import { gamepadManager } from '../services/gamepadManager';
 import { MissionHUD } from './MissionHUD';
@@ -327,7 +328,7 @@ export const BicycleGameModal: React.FC<BicycleGameModalProps> = ({
           if (onUpdateHighScore) {
             onUpdateHighScore(Math.round(distanceRef.current));
           }
-          confetti({ particleCount: 90, spread: 70, origin: { y: 0.6 } });
+          celebrate({ particleCount: 90, spread: 70, origin: { y: 0.6 } });
           soundEffects.playTriumphChime(0.5);
           settleMission({ // mission settles exactly once, on route completion
             distance: distanceRef.current,
@@ -427,8 +428,9 @@ export const BicycleGameModal: React.FC<BicycleGameModalProps> = ({
       // Apply screen shake
       if (shakeRef.current > 0) {
         shakeRef.current = Math.max(0, shakeRef.current - dt * 2.5);
-        const sx = (Math.random() - 0.5) * shakeRef.current * 18;
-        const sy = (Math.random() - 0.5) * shakeRef.current * 18;
+        const scale = settingsStore.getShakeScale();
+        const sx = (Math.random() - 0.5) * shakeRef.current * 18 * scale;
+        const sy = (Math.random() - 0.5) * shakeRef.current * 18 * scale;
         ctx.translate(sx, sy);
       }
 

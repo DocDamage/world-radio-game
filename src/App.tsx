@@ -14,6 +14,7 @@ import {
   Zap,
   Compass,
   Eye,
+  Accessibility,
   Layers,
   KeyRound,
   Loader2,
@@ -31,6 +32,7 @@ import { streamRecorder } from './services/recorder';
 import { gamepadManager } from './services/gamepadManager';
 import { dlss5 } from './services/dlss5Engine';
 import { travelerState } from './services/travelerState';
+import { settingsStore } from './services/settingsStore';
 import { inputManager } from './services/inputManager';
 import { missionSession } from './missions/session';
 import { buildScenario } from './missions/scenarios';
@@ -38,9 +40,11 @@ import { MISSION_CATALOG, EXPEDITIONS } from './missions/catalog';
 import { MissionResults, type MissionDebriefData } from './components/MissionResults';
 import type { GameId, MissionScenario, MissionResultPayload } from './missions/types';
 import { isGlobeTilesKeyUsable, type GlobeTilesStatus } from './services/globeTiles';
+import { VisualCueToast } from './components/VisualCueToast';
 
 // Code-split heavy 3D Globe, Street View, and Mini-Game Modals to optimize bundle size
 const WorldGlobe = lazy(() => import('./components/WorldGlobe').then(m => ({ default: m.WorldGlobe })));
+const AccessibilitySettingsModal = lazy(() => import('./components/AccessibilitySettingsModal').then(m => ({ default: m.AccessibilitySettingsModal })));
 const StreetWalker = lazy(() => import('./components/StreetWalker').then(m => ({ default: m.StreetWalker })));
 const SignalHuntModal = lazy(() => import('./components/SignalHuntModal').then(m => ({ default: m.SignalHuntModal })));
 const DetectiveLabModal = lazy(() => import('./components/DetectiveLabModal').then(m => ({ default: m.DetectiveLabModal })));
@@ -80,6 +84,28 @@ export function App() {
   const [isDlssModalOpen, setIsDlssModalOpen] = useState<boolean>(false);
   const [isMissionBoardOpen, setIsMissionBoardOpen] = useState<boolean>(false);
   const [isWorldMonitorOpen, setIsWorldMonitorOpen] = useState<boolean>(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+
+  // Accessibility & playback settings (reduced motion/flashes, screen shake,
+  // visual sound cues, radio/effects volumes) — reactive via the store.
+  const [settings, setSettings] = useState(() => settingsStore.getState());
+  useEffect(() => {
+    return settingsStore.subscribe(() => setSettings(settingsStore.getState()));
+  }, []);
+
+  // Honor settings: kill CSS animations globally and keep the synth volume
+  // in sync whenever the player changes them.
+  useEffect(() => {
+    document.documentElement.toggleAttribute('data-reduced-motion', settings.reducedMotion);
+  }, [settings.reducedMotion]);
+  useEffect(() => {
+    soundEffects.setVolume(settings.effectsVolume);
+  }, [settings.effectsVolume]);
+
+  useEffect(() => {
+    if (isSettingsOpen) inputManager.registerModalOpen('settings');
+    else inputManager.registerModalClose('settings');
+  }, [isSettingsOpen]);
 
   // Active mission run: scenario params passed into the game, and the debrief
   // shown once missionSession settles the run (coins/XP/medal/expedition).
@@ -671,6 +697,7 @@ export function App() {
       setIsPaletteOpen(false);
       setIsMissionBoardOpen(false);
       setIsWorldMonitorOpen(false);
+      setIsSettingsOpen(false);
     } else if (e.key === 'ArrowRight') {
       handleNextStation();
     } else if (e.key === 'ArrowLeft') {
@@ -886,6 +913,16 @@ export function App() {
             <Eye className="w-3.5 h-3.5 text-emerald-400" /> Monitor
           </button>
 
+          {/* Accessibility & Sound Settings */}
+          <button
+            onClick={() => setIsSettingsOpen(true)}
+            className="px-3 py-1.5 bg-slate-900/80 hover:bg-slate-800 text-emerald-300 border border-slate-700/80 rounded-xl text-xs font-bold transition flex items-center gap-1.5"
+            title="Accessibility & sound — reduced motion, flashes, screen shake, volumes"
+          >
+            <Accessibility className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="hidden sm:inline">Access</span>
+          </button>
+
           {/* Google Photorealistic 3D Tiles */}
           <div className="relative flex items-center gap-1">
             <button
@@ -1002,6 +1039,7 @@ export function App() {
             tilesApiKey={tilesApiKey}
             tilesEnabled={tilesEnabled}
             onTilesStatusChange={handleTilesStatusChange}
+            reducedMotion={settings.reducedMotion}
           />
         ) : (
           activeStation && (
@@ -1209,7 +1247,16 @@ export function App() {
         activeCountry={activeStation?.country || selectedPlace?.country || ''}
         activeStationName={activeStation?.name || ''}
       />
+
+      {/* Accessibility & Sound Settings */}
+      <AccessibilitySettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+      />
       </Suspense>
+
+      {/* Visual equivalent for sound-only cues (when enabled in settings) */}
+      <VisualCueToast />
 
       {/* Mission debrief (medal, rewards, expedition progress) */}
       {missionDebrief && (

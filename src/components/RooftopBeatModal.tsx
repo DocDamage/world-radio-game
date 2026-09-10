@@ -5,7 +5,7 @@ import { gamepadManager } from '../services/gamepadManager';
 import { MissionHUD } from './MissionHUD';
 import { useModalA11y } from '../hooks/useModalA11y';
 import type { MissionScenario, MissionResultPayload } from '../missions/types';
-import confetti from 'canvas-confetti';
+import { celebrate } from '../services/celebrate';
 
 interface RooftopBeatModalProps {
   isOpen: boolean;
@@ -147,7 +147,7 @@ export const RooftopBeatModal: React.FC<RooftopBeatModalProps> = ({
   const triggerFeverMode = useCallback(() => {
     setIsFeverMode(true);
     soundEffects.playCrowdCheer(3.0, 0.22);
-    confetti({
+    celebrate({
       particleCount: 100,
       spread: 80,
       origin: { y: 0.6 }

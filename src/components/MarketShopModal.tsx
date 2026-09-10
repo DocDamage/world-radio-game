@@ -7,7 +7,7 @@ import { MissionHUD } from './MissionHUD';
 import { useModalA11y } from '../hooks/useModalA11y';
 import type { MissionScenario, MissionResultPayload } from '../missions/types';
 import type { BackpackItem, MarketItem } from '../types';
-import confetti from 'canvas-confetti';
+import { celebrate } from '../services/celebrate';
 
 interface MarketShopModalProps {
   isOpen: boolean;
@@ -241,7 +241,7 @@ export const MarketShopModal: React.FC<MarketShopModalProps> = ({
 
       if (stars === 3) {
         soundEffects.playCrowdCheer(2.5, 0.2);
-        confetti({
+        celebrate({
           particleCount: 100,
           spread: 75,
           origin: { y: 0.6 }

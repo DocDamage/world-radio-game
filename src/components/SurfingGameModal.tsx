@@ -5,7 +5,7 @@ import { soundEffects } from '../services/audioEffects';
 import { MissionHUD } from './MissionHUD';
 import { useModalA11y } from '../hooks/useModalA11y';
 import type { MissionScenario, MissionResultPayload } from '../missions/types';
-import confetti from 'canvas-confetti';
+import { celebrate } from '../services/celebrate';
 
 interface SurfingGameModalProps {
   isOpen: boolean;
@@ -430,7 +430,7 @@ export const SurfingGameModal: React.FC<SurfingGameModalProps> = ({
           setStyleRating(rating);
 
           setGameState('finished');
-          confetti({ particleCount: 80, spread: 60, origin: { y: 0.55 } });
+          celebrate({ particleCount: 80, spread: 60, origin: { y: 0.55 } });
           soundEffects.playTriumphChime(0.4);
           settleMission(); // mission settles exactly once, on riding out the shoulder
         }

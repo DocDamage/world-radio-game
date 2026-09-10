@@ -6,7 +6,7 @@ import { MissionHUD } from './MissionHUD';
 import { useModalA11y } from '../hooks/useModalA11y';
 import type { MissionScenario, MissionResultPayload } from '../missions/types';
 import type { BackpackItem } from '../types';
-import confetti from 'canvas-confetti';
+import { celebrate } from '../services/celebrate';
 
 interface PhotoSnapModalProps {
   isOpen: boolean;
@@ -272,7 +272,7 @@ export const PhotoSnapModal: React.FC<PhotoSnapModalProps> = ({
     setSavedDataUrl(dataUrl);
     setCaptured(true);
 
-    confetti({
+    celebrate({
       particleCount: 60,
       spread: 60,
       origin: { y: 0.5 }

@@ -7,7 +7,8 @@ import type { BackpackItem, FishSpecies, EnvironmentType } from '../types';
 import { MissionHUD } from './MissionHUD';
 import { useModalA11y } from '../hooks/useModalA11y';
 import type { MissionScenario, MissionResultPayload } from '../missions/types';
-import confetti from 'canvas-confetti';
+import { celebrate } from '../services/celebrate';
+import { settingsStore } from '../services/settingsStore';
 
 interface FishingGameModalProps {
   isOpen: boolean;
@@ -160,7 +161,7 @@ export const FishingGameModal: React.FC<FishingGameModalProps> = ({
     soundEffects.playTriumphChime();
     gamepadManager.vibrate(300, 0.7, 0.5);
 
-    confetti({
+    celebrate({
       particleCount: isRecord ? 130 : 85,
       spread: isRecord ? 85 : 65,
       origin: { y: 0.6 }
@@ -363,7 +364,7 @@ export const FishingGameModal: React.FC<FishingGameModalProps> = ({
         }
 
         // Screen shake if tension is critically high (> 85%)
-        setScreenShake(tensionRef.current > 85);
+        setScreenShake(tensionRef.current > 85 && settingsStore.getShakeScale() > 0);
 
         // Pull fish towards angler
         if (hookedFishRef.current) {

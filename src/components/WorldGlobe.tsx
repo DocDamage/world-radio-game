@@ -30,6 +30,7 @@ interface WorldGlobeProps {
   /** Toggles the Photorealistic 3D Tiles layer on top of the globe. */
   tilesEnabled?: boolean;
   onTilesStatusChange?: (status: GlobeTilesStatus) => void;
+  reducedMotion?: boolean;
 }
 
 export const WorldGlobe: React.FC<WorldGlobeProps> = ({
@@ -40,7 +41,8 @@ export const WorldGlobe: React.FC<WorldGlobeProps> = ({
   isMysteryMode = false,
   tilesApiKey = '',
   tilesEnabled = false,
-  onTilesStatusChange
+  onTilesStatusChange,
+  reducedMotion = false
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const globeInstanceRef = useRef<any>(null);
@@ -53,12 +55,14 @@ export const WorldGlobe: React.FC<WorldGlobeProps> = ({
   const activeStationRef = useRef(activeStation);
   const isMysteryModeRef = useRef(isMysteryMode);
   const onTilesStatusChangeRef = useRef(onTilesStatusChange);
+  const reducedMotionRef = useRef(reducedMotion);
   useEffect(() => {
     onSelectStationRef.current = onSelectStation;
     onGlobeClickRef.current = onGlobeClick;
     activeStationRef.current = activeStation;
     isMysteryModeRef.current = isMysteryMode;
     onTilesStatusChangeRef.current = onTilesStatusChange;
+    reducedMotionRef.current = reducedMotion;
   });
 
   // Photorealistic 3D Tiles layer handle
@@ -129,7 +133,7 @@ export const WorldGlobe: React.FC<WorldGlobeProps> = ({
 
     // Auto-rotation controls
     const controls = globe.controls();
-    controls.autoRotate = true;
+    controls.autoRotate = !reducedMotionRef.current;
     controls.autoRotateSpeed = 0.35;
     controls.enableDamping = true;
     controls.dampingFactor = 0.1;
@@ -161,7 +165,16 @@ export const WorldGlobe: React.FC<WorldGlobeProps> = ({
     globeInstanceRef.current.ringsData(activeStation ? [activeStation] : []);
   }, [stations, activeStation]);
 
-  // Smooth fly-to when active station changes
+  // Sync auto-rotation setting dynamically
+  useEffect(() => {
+    if (!globeInstanceRef.current) return;
+    const controls = globeInstanceRef.current.controls();
+    if (controls) {
+      controls.autoRotate = !reducedMotion;
+    }
+  }, [reducedMotion]);
+
+  // Smooth fly-to when active station changes (instant jump under reduced motion)
   useEffect(() => {
     if (!globeInstanceRef.current || !activeStation) return;
     const controls = globeInstanceRef.current.controls();
@@ -173,9 +186,9 @@ export const WorldGlobe: React.FC<WorldGlobeProps> = ({
         lng: activeStation.geo_long,
         altitude: 1.15
       },
-      1400 // Animation duration in ms
+      reducedMotion ? 0 : 1400 // Animation duration in ms
     );
-  }, [activeStation]);
+  }, [activeStation, reducedMotion]);
 
   // Google Photorealistic 3D Tiles layer (opt-in; needs a Map Tiles API key).
   // The globe instance is created by the effect above, which runs first, so

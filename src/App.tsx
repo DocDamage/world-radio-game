@@ -432,7 +432,9 @@ export function App() {
         distanceMeters: dist,
         signalStrength: strength,
         found: found,
-        score: found ? prev.score + 100 : prev.score
+        // Award the +100 find bonus only on the transition into the success
+        // radius — staying inside (or re-entering) must not re-award the score
+        score: found && !prev.found ? prev.score + 100 : prev.score
       }));
     }
   };
@@ -452,8 +454,10 @@ export function App() {
       score: detectiveState.score
     });
 
+    // Mystery isolation: the opening clue must never name the target city or
+    // country — the player deduces it from street view + forensic clues only
     setMysteryClue(
-      `You are surrounded by local radio broadcasts in ${randomStation.place || randomStation.country}. Look at the street styles and listen carefully to the broadcast rhythms.`
+      'An uncataloged broadcast is on the air. Study the street view, the forensic signal readouts, and the radio metadata to pinpoint the transmitter city on the map.'
     );
 
     setIsCityDrawerOpen(false);

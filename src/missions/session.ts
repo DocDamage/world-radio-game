@@ -1,11 +1,16 @@
 import type { ActiveMissionSession } from './types';
-import { getMissionById, getExpeditionById } from './catalog';
-import { travelerState } from '../services/travelerState';
+// NOTE: runtime imports carry explicit .ts extensions so Node's test runner
+// (strict ESM resolution) can load this module directly in integration tests.
+import { getMissionById, getExpeditionById } from './catalog.ts';
+import { travelerState } from '../services/travelerState.ts';
 
 class MissionSessionManager {
   private currentSession: ActiveMissionSession | null = null;
   private activeExpeditionId: string | null = null;
   private expeditionStageIndex: number = 0;
+  // Sessions created within the same millisecond must still settle under
+  // distinct transaction keys, or the once-only guard would refuse the run.
+  private sessionCounter: number = 0;
 
   public startMission(missionId: string, choiceId?: string, expeditionId?: string, stageIndex?: number): ActiveMissionSession | null {
     const mission = getMissionById(missionId);
@@ -14,7 +19,7 @@ class MissionSessionManager {
     const chosenOptionId = choiceId || (mission.choices[0] ? mission.choices[0].id : 'default');
 
     this.currentSession = {
-      sessionId: `ms_${mission.id}_${Date.now()}`,
+      sessionId: `ms_${mission.id}_${Date.now()}_${++this.sessionCounter}`,
       mission,
       chosenOptionId,
       gameId: mission.gameId,

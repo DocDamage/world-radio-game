@@ -76,4 +76,27 @@ function streamProxyPlugin(): Plugin {
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), streamProxyPlugin()],
+  build: {
+    rolldownOptions: {
+      output: {
+        // Long-lived, cache-stable vendor chunks for the lazy-loaded 3D stack:
+        // three is shared by the globe and the 3D tiles renderer, globe.gl +
+        // three-globe form the globe engine, and d3 powers its data binding.
+        // Splitting them keeps chunks smaller (parallel download) and means an
+        // app update never invalidates the cached vendor bytes.
+        advancedChunks: {
+          groups: [
+            // Only the parts of three shared by the globe AND the 3D tiles
+            // renderer move into the vendor chunk; tiles-exclusive three
+            // modules stay with their lazy renderer chunks.
+            { name: 'three', test: /node_modules[\\/]three[\\/]/, minShareCount: 2 },
+            // d3 (globe.gl's data-binding stack) is captured before the globe
+            // engine so it caches independently of globe.gl/three-globe.
+            { name: 'd3', test: /node_modules[\\/](d3-[a-z-]+|internmap|delaunator|robust-predicates)[\\/]/ },
+            { name: 'globe-engine', test: /node_modules[\\/](globe\.gl|three-globe)[\\/]/ }
+          ]
+        }
+      }
+    }
+  }
 })

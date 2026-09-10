@@ -86,7 +86,8 @@ export const MISSION_CATALOG: MissionDefinition[] = [
     rewards: { coins: 30, xp: 45 },
     supportedBiomes: ['coastal', 'river', 'alpine'],
     contextLabel: 'Curated freshwater & coastal habitat survey',
-    expansionRef: 'O07/O14'
+    expansionRef: 'O07/O14',
+    status: 'live'
   },
 
   // 4. Rooftop DJ - Orbit-to-Rooftop Set
@@ -114,7 +115,8 @@ export const MISSION_CATALOG: MissionDefinition[] = [
     medalThresholds: { bronze: 500, silver: 1200, gold: 2000 },
     rewards: { coins: 40, xp: 55 },
     contextLabel: 'Quantized analog beat grid inspired by orbital passes',
-    expansionRef: 'O05/O06'
+    expansionRef: 'O05/O06',
+    status: 'live'
   },
 
   // 5. Street Chef - Broadcast Night Market
@@ -142,7 +144,8 @@ export const MISSION_CATALOG: MissionDefinition[] = [
     medalThresholds: { bronze: 50, silver: 90, gold: 130 },
     rewards: { coins: 35, xp: 50 },
     contextLabel: 'Curated regional market delicacies and street ingredients',
-    expansionRef: 'O16/O22'
+    expansionRef: 'O16/O22',
+    status: 'live'
   },
 
   // 6. Photo Snap - City Correspondent
@@ -170,7 +173,8 @@ export const MISSION_CATALOG: MissionDefinition[] = [
     medalThresholds: { bronze: 70, silver: 85, gold: 95 },
     rewards: { coins: 30, xp: 40 },
     contextLabel: 'Exportable postcard rendering with authentic geolocation metadata',
-    expansionRef: 'O08/O09'
+    expansionRef: 'O08/O09',
+    status: 'live'
   },
 
   // 7. Desert Buggy - Solar Relay Rally
@@ -199,7 +203,8 @@ export const MISSION_CATALOG: MissionDefinition[] = [
     rewards: { coins: 40, xp: 60 },
     supportedBiomes: ['desert'],
     contextLabel: 'Arid terrain simulation inspired by topographic desert surveys',
-    expansionRef: 'O01/O18'
+    expansionRef: 'O01/O18',
+    status: 'live'
   },
 
   // 8. Alpine Downhill - Mountain Broadcast Courier
@@ -228,7 +233,8 @@ export const MISSION_CATALOG: MissionDefinition[] = [
     rewards: { coins: 40, xp: 55 },
     supportedBiomes: ['alpine'],
     contextLabel: 'Sub-alpine glacier topology and slalom course physics',
-    expansionRef: 'O01/O07'
+    expansionRef: 'O01/O07',
+    status: 'live'
   },
 
   // 9. Surfing - Swell Window
@@ -257,7 +263,8 @@ export const MISSION_CATALOG: MissionDefinition[] = [
     rewards: { coins: 35, xp: 50 },
     supportedBiomes: ['coastal'],
     contextLabel: 'Maritime wave telemetry and ocean swell simulation',
-    expansionRef: 'O07/O09'
+    expansionRef: 'O07/O09',
+    status: 'live'
   },
 
   // 10. Signal Hunt - Find the Lost Relay
@@ -285,7 +292,8 @@ export const MISSION_CATALOG: MissionDefinition[] = [
     medalThresholds: { bronze: 50, silver: 80, gold: 100 },
     rewards: { coins: 45, xp: 65 },
     contextLabel: 'Radio direction finding (RDF) using Line of Bearing triangulation',
-    expansionRef: 'O06/O17'
+    expansionRef: 'O06/O17',
+    status: 'live'
   },
 
   // 11. Radio Detective - The Missing Broadcast
@@ -313,7 +321,8 @@ export const MISSION_CATALOG: MissionDefinition[] = [
     medalThresholds: { bronze: 2500, silver: 4000, gold: 4800 },
     rewards: { coins: 50, xp: 80 },
     contextLabel: 'Forensic signal intelligence & geographic mystery isolation',
-    expansionRef: 'O14/O15'
+    expansionRef: 'O14/O15',
+    status: 'live'
   }
 ];
 

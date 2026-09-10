@@ -2,6 +2,8 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { X, Award, Waves, Zap } from 'lucide-react';
 import type { RadioStation } from '../types';
 import { soundEffects } from '../services/audioEffects';
+import { MissionHUD } from './MissionHUD';
+import type { MissionScenario, MissionResultPayload } from '../missions/types';
 import confetti from 'canvas-confetti';
 
 interface SurfingGameModalProps {
@@ -12,6 +14,10 @@ interface SurfingGameModalProps {
   onAddCoins?: (amount: number) => void;
   highScore?: number;
   onUpdateHighScore?: (score: number) => void;
+  /** Active World Expedition mission scenario (null = free surf) */
+  missionScenario?: MissionScenario | null;
+  /** Emitted exactly once when an active mission run settles */
+  onMissionResult?: (payload: MissionResultPayload) => void;
 }
 
 interface SprayParticle {
@@ -39,7 +45,9 @@ export const SurfingGameModal: React.FC<SurfingGameModalProps> = ({
   waterwayName,
   onAddCoins,
   highScore = 0,
-  onUpdateHighScore
+  onUpdateHighScore,
+  missionScenario,
+  onMissionResult
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -89,6 +97,38 @@ export const SurfingGameModal: React.FC<SurfingGameModalProps> = ({
   const floaterTimeRef = useRef(0);
   const trickTimerRef = useRef(0);
   const runSettledRef = useRef(false);
+
+  // Mission context (World Expedition Command), read fresh by the 60fps loop.
+  const scenarioRef = useRef<MissionScenario | null | undefined>(undefined);
+  scenarioRef.current = missionScenario;
+  const missionSettledRef = useRef<boolean>(false);
+
+  // Fresh session each time the modal opens (clears any stale finished state)
+  useEffect(() => {
+    if (!isOpen) return;
+    missionSettledRef.current = false;
+    setGameState('ready');
+  }, [isOpen]);
+
+  // Settle the active mission exactly once — only when the ride is kicked out
+  // on the open shoulder (finished). Wipeouts and early exits never settle,
+  // so retrying is never punished and quitting cannot farm mission rewards.
+  const settleMission = useCallback(() => {
+    const scenario = scenarioRef.current;
+    if (!scenario || missionSettledRef.current) return;
+    missionSettledRef.current = true;
+    onMissionResult?.({
+      missionId: scenario.missionId,
+      gameId: scenario.gameId,
+      score: Math.round(statsRef.current.score),
+      outcome: 'completed',
+      stats: {
+        rideScore: Math.round(statsRef.current.score),
+        tubeTime: Math.round(statsRef.current.tubeTime * 10) / 10,
+        runTime: Math.round(statsRef.current.runTime)
+      }
+    });
+  }, [onMissionResult]);
 
   // Reset Surfer
   const resetRun = useCallback(() => {
@@ -187,6 +227,9 @@ export const SurfingGameModal: React.FC<SurfingGameModalProps> = ({
       const surfer = surferRef.current;
       const keys = keysRef.current;
       const stats = statsRef.current;
+      // Mission scenarios tune barrel vs open-face trick scoring weights
+      const tubeScale = scenarioRef.current?.tubeScoreScale ?? 1;
+      const trickScale = scenarioRef.current?.trickScoreScale ?? 1;
 
       // Progressive wave intensity over time
       const intensity = Math.min(2.2, 1.0 + stats.runTime * 0.035);
@@ -223,7 +266,7 @@ export const SurfingGameModal: React.FC<SurfingGameModalProps> = ({
           }
           stats.multiplier = Math.min(5, 1 + Math.floor(stats.tubeTime * 1.5));
           setMultiplier(stats.multiplier);
-          stats.score += Math.round(180 * dt * stats.multiplier * intensity);
+          stats.score += Math.round(180 * dt * stats.multiplier * intensity * tubeScale);
         }
 
         // Steer inputs
@@ -254,7 +297,7 @@ export const SurfingGameModal: React.FC<SurfingGameModalProps> = ({
         // ----------------------------------------------------
         // 1. Cutback: sharp directional reversal back to pocket from the open shoulder
         if (keys.left && surfer.x > 320 && surfer.carveHeat > 0.4 && trickCooldownRef.current <= 0) {
-          const pts = 180 * stats.multiplier;
+          const pts = Math.round(180 * stats.multiplier * trickScale);
           stats.score += pts;
           setActiveTrick({ name: 'RADICAL CUTBACK', pts });
           trickTimerRef.current = 1.4;
@@ -266,7 +309,7 @@ export const SurfingGameModal: React.FC<SurfingGameModalProps> = ({
         if (keys.up && surfer.y <= 160 && surfer.speed > 13) {
           floaterTimeRef.current += dt;
           if (floaterTimeRef.current > 0.35 && trickCooldownRef.current <= 0) {
-            const pts = 250 * stats.multiplier;
+            const pts = Math.round(250 * stats.multiplier * trickScale);
             stats.score += pts;
             setActiveTrick({ name: 'LIP FLOATER', pts });
             trickTimerRef.current = 1.5;
@@ -280,7 +323,7 @@ export const SurfingGameModal: React.FC<SurfingGameModalProps> = ({
 
         // 3. Power Snap off the lip
         if (keys.snap && surfer.y < 210 && !surfer.airborne && surfer.speed > 13 && trickCooldownRef.current <= 0) {
-          const pts = 320 * stats.multiplier;
+          const pts = Math.round(320 * stats.multiplier * trickScale);
           stats.score += pts;
           setActiveTrick({ name: 'POWER SNAP', pts });
           trickTimerRef.current = 1.4;
@@ -304,13 +347,13 @@ export const SurfingGameModal: React.FC<SurfingGameModalProps> = ({
           surfer.airborne = true;
           surfer.airTime = 0.65;
           surfer.vy = -180;
-          stats.score += 250 * stats.multiplier;
+          stats.score += Math.round(250 * stats.multiplier * trickScale);
           soundEffects.playTriumphChime(0.2);
         }
 
         // 5. Airborne Spin: Aerial 360 Air Reverse
         if (surfer.airborne && surfer.airTime > 0.1 && (keys.left || keys.right) && trickCooldownRef.current <= 0) {
-          const pts = 500 * stats.multiplier;
+          const pts = Math.round(500 * stats.multiplier * trickScale);
           stats.score += pts;
           setActiveTrick({ name: 'AERIAL 360', pts });
           trickTimerRef.current = 1.6;
@@ -381,6 +424,7 @@ export const SurfingGameModal: React.FC<SurfingGameModalProps> = ({
           setGameState('finished');
           confetti({ particleCount: 80, spread: 60, origin: { y: 0.55 } });
           soundEffects.playTriumphChime(0.4);
+          settleMission(); // mission settles exactly once, on riding out the shoulder
         }
 
         // Clamp Y (wave crest to trough)
@@ -410,7 +454,7 @@ export const SurfingGameModal: React.FC<SurfingGameModalProps> = ({
             if (Math.hypot(dx, dy) < 32) {
               c.collected = true;
               const bonus = c.type === 'wave_orb' ? 150 : 75;
-              stats.score += bonus * stats.multiplier;
+              stats.score += Math.round(bonus * stats.multiplier * trickScale);
               soundEffects.playRadarPing(880, 0.1);
             }
           }
@@ -646,7 +690,7 @@ export const SurfingGameModal: React.FC<SurfingGameModalProps> = ({
     return () => {
       if (loopRef.current) cancelAnimationFrame(loopRef.current);
     };
-  }, [isOpen, gameState, onAddCoins, longestTubeTime, highScore, onUpdateHighScore]);
+  }, [isOpen, gameState, onAddCoins, longestTubeTime, highScore, onUpdateHighScore, settleMission]);
 
   if (!isOpen) return null;
 
@@ -694,13 +738,20 @@ export const SurfingGameModal: React.FC<SurfingGameModalProps> = ({
           </div>
         </div>
 
+        {/* Mission objective banner (World Expedition Command) */}
+        <MissionHUD
+          scenario={missionScenario}
+          progressLabel={gameState === 'finished' ? 'Rode out the shoulder ✓' : `Score ${score.toLocaleString()}`}
+          secondaryLabel={`Tube ${tubeTimeSec}s • Mult ${multiplier}x`}
+        />
+
         {/* Game Canvas Container */}
         <div className="relative w-full bg-slate-950 flex items-center justify-center">
           <canvas
             ref={canvasRef}
             width={760}
             height={440}
-            className="w-full h-auto max-h-[440px] block"
+            className="w-full h-auto max-h-[38vh] sm:max-h-[440px] block"
           />
 
           {/* Floating Trick Banner */}

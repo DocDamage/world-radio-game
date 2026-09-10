@@ -1,7 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Mountain, Wind, X, Trophy, Sparkles } from 'lucide-react';
 import { soundEffects } from '../services/audioEffects';
 import { gamepadManager } from '../services/gamepadManager';
+import { MissionHUD } from './MissionHUD';
+import type { MissionScenario, MissionResultPayload } from '../missions/types';
 
 interface AlpineDownhillModalProps {
   isOpen: boolean;
@@ -11,6 +13,10 @@ interface AlpineDownhillModalProps {
   onEarnCoins: (amount: number) => void;
   highScore?: number;
   onUpdateHighScore?: (score: number) => void;
+  /** Active World Expedition mission scenario (null = free descent) */
+  missionScenario?: MissionScenario | null;
+  /** Emitted exactly once when an active mission run settles */
+  onMissionResult?: (payload: MissionResultPayload) => void;
 }
 
 type SkiState = 'skiing' | 'wipeout' | 'finished';
@@ -38,7 +44,9 @@ export const AlpineDownhillModal: React.FC<AlpineDownhillModalProps> = ({
   countryName,
   onEarnCoins,
   highScore = 0,
-  onUpdateHighScore
+  onUpdateHighScore,
+  missionScenario,
+  onMissionResult
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -49,7 +57,8 @@ export const AlpineDownhillModal: React.FC<AlpineDownhillModalProps> = ({
   const [comboCount, setComboCount] = useState<number>(0);
   const [skiState, setSkiState] = useState<SkiState>('skiing');
   const [finalTime, setFinalTime] = useState<string>('0.0');
-  const FINISH_DISTANCE = 2500;
+  // Course length: mission scenarios tune it (technical slalom vs glacier speedline)
+  const FINISH_DISTANCE = missionScenario?.finishDistance ?? 2500;
 
   // Mutable 60fps loop refs
   const playerXRef = useRef<number>(0);
@@ -74,6 +83,33 @@ export const AlpineDownhillModal: React.FC<AlpineDownhillModalProps> = ({
   highScoreRef.current = highScore;
   const onUpdateHighScoreRef = useRef(onUpdateHighScore);
   onUpdateHighScoreRef.current = onUpdateHighScore;
+
+  // Mission context (World Expedition Command), read fresh by the 60fps loop.
+  const scenarioRef = useRef<MissionScenario | null | undefined>(undefined);
+  scenarioRef.current = missionScenario;
+  const missionSettledRef = useRef<boolean>(false);
+
+  // Settle the active mission exactly once — only when the descent is
+  // completed (finish line reached). Wipeouts and early exits never settle,
+  // so retrying is never punished and quitting cannot farm mission rewards.
+  const settleMission = useCallback(() => {
+    const scenario = scenarioRef.current;
+    if (!scenario || missionSettledRef.current) return;
+    missionSettledRef.current = true;
+    const w = scenario.scoreWeights || {};
+    const score = Math.round(gatesRef.current * (w.gate ?? 80) + coinsRef.current);
+    onMissionResult?.({
+      missionId: scenario.missionId,
+      gameId: scenario.gameId,
+      score,
+      outcome: 'completed',
+      stats: {
+        gates: gatesRef.current,
+        coins: coinsRef.current,
+        distance: Math.round(distanceRef.current)
+      }
+    });
+  }, [onMissionResult]);
 
   // Keyboard controls
   useEffect(() => {
@@ -135,6 +171,7 @@ export const AlpineDownhillModal: React.FC<AlpineDownhillModalProps> = ({
     setComboCount(0);
     obstaclesRef.current = [];
     snowParticlesRef.current = [];
+    missionSettledRef.current = false;
 
     // Pre-populate slalom course
     for (let i = 0; i < 9; i++) {
@@ -188,8 +225,9 @@ export const AlpineDownhillModal: React.FC<AlpineDownhillModalProps> = ({
         }
       }
 
-      // Gravity pulls skier down the mountain
-      speedRef.current = Math.min(78, speedRef.current + 3.5 * dt);
+      // Gravity pulls skier down the mountain (mission scenarios tune the
+      // terminal velocity — the glacier speedline tucks much faster)
+      speedRef.current = Math.min(scenarioRef.current?.maxSpeed ?? 78, speedRef.current + 3.5 * dt);
 
       // Steering with carve resistance
       playerXRef.current += steerInputRef.current * 1.45 * dt;
@@ -210,11 +248,12 @@ export const AlpineDownhillModal: React.FC<AlpineDownhillModalProps> = ({
         }
         soundEffects.playTriumphChime();
         gamepadManager.vibrate(300, 0.6, 0.4);
+        settleMission(); // mission settles exactly once, on descent completion
       }
 
-      // Spawn new course gates
+      // Spawn new course gates (mission scenarios tune the gate spacing)
       nextSpawn += step;
-      if (nextSpawn > 75) {
+      if (nextSpawn > (scenarioRef.current?.gateSpacing ?? 75)) {
         nextSpawn = 0;
         spawnObstacle(950);
       }
@@ -259,7 +298,8 @@ export const AlpineDownhillModal: React.FC<AlpineDownhillModalProps> = ({
               comboTimerRef.current = 3.0; // 3 second combo window
               setComboCount(comboRef.current);
               const comboMultiplier = Math.min(4, comboRef.current);
-              const gateCoins = 15 * comboMultiplier;
+              // Mission scenarios tune the gate clearance coin bonus
+              const gateCoins = Math.round(15 * comboMultiplier * (scenarioRef.current?.gateBonusScale ?? 1));
               coinsRef.current += gateCoins;
               soundEffects.playRadarPing(880 + comboRef.current * 100, 0.1);
               gamepadManager.vibrate(50, 0.4, 0.2);
@@ -352,7 +392,7 @@ export const AlpineDownhillModal: React.FC<AlpineDownhillModalProps> = ({
     return () => {
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
     };
-  }, [isOpen]);
+  }, [isOpen, settleMission]);
 
   const handleExit = () => {
     if (coinsRef.current > 0 && !runSettledRef.current) {
@@ -396,8 +436,15 @@ export const AlpineDownhillModal: React.FC<AlpineDownhillModalProps> = ({
           </button>
         </div>
 
+        {/* Mission objective banner (World Expedition Command) */}
+        <MissionHUD
+          scenario={missionScenario}
+          progressLabel={`${distanceMeters} / ${FINISH_DISTANCE} m`}
+          secondaryLabel={`Gates ${gatesCleared} • Combo x${comboCount || 1}`}
+        />
+
         {/* Live Canvas */}
-        <div className="relative w-full h-[460px] bg-slate-950 flex items-center justify-center overflow-hidden">
+        <div className="relative w-full h-[300px] sm:h-[460px] bg-slate-950 flex items-center justify-center overflow-hidden">
           <canvas
             ref={canvasRef}
             width={860}

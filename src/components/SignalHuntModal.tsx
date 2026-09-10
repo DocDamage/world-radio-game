@@ -1,7 +1,9 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { X, Trophy, Compass, Crosshair } from 'lucide-react';
 import type { SignalHuntState, RadioStation } from '../types';
 import { soundEffects } from '../services/audioEffects';
+import { MissionHUD } from './MissionHUD';
+import type { MissionScenario, MissionResultPayload } from '../missions/types';
 import confetti from 'canvas-confetti';
 
 interface SignalHuntModalProps {
@@ -11,6 +13,10 @@ interface SignalHuntModalProps {
   activeStation: RadioStation | null;
   onStepCloser: (direction: 'north' | 'south' | 'east' | 'west') => void;
   onClaimVictory: () => void;
+  /** Active World Expedition mission scenario (null = free fox hunt) */
+  missionScenario?: MissionScenario | null;
+  /** Emitted exactly once when an active mission run settles */
+  onMissionResult?: (payload: MissionResultPayload) => void;
 }
 
 interface BearingLine {
@@ -26,9 +32,64 @@ export const SignalHuntModal: React.FC<SignalHuntModalProps> = ({
   huntState,
   activeStation,
   onStepCloser,
-  onClaimVictory
+  onClaimVictory,
+  missionScenario,
+  onMissionResult
 }) => {
   const radarCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // Mission context (World Expedition Command), read fresh by handlers.
+  const scenarioRef = useRef<MissionScenario | null | undefined>(undefined);
+  scenarioRef.current = missionScenario;
+  const missionSettledRef = useRef<boolean>(false);
+  const stepsTakenRef = useRef<number>(0);
+  const lobErrorsRef = useRef<number[]>([]);
+  const [missionSteps, setMissionSteps] = useState<number>(0);
+
+  // Reset mission bookkeeping once per open
+  useEffect(() => {
+    if (!isOpen) return;
+    missionSettledRef.current = false;
+    stepsTakenRef.current = 0;
+    lobErrorsRef.current = [];
+    setMissionSteps(0);
+  }, [isOpen]);
+
+  // Settle the active mission exactly once — only when the clandestine
+  // transmitter is captured. Score rewards triangulation quality: capture
+  // (60) + line-of-bearing accuracy bonus (0–40) − step penalty (0–10).
+  const settleMission = useCallback(() => {
+    const scenario = scenarioRef.current;
+    if (!scenario || missionSettledRef.current) return;
+    missionSettledRef.current = true;
+    const lobErrors = lobErrorsRef.current;
+    let lobBonus = 0;
+    let avgErr = 0;
+    if (lobErrors.length > 0) {
+      avgErr = lobErrors.reduce((a, b) => a + b, 0) / lobErrors.length;
+      lobBonus = avgErr <= 10 ? 40 : avgErr <= 20 ? 30 : avgErr <= 30 ? 20 : 10;
+    }
+    const stepPenalty = Math.min(10, Math.floor(stepsTakenRef.current / 20));
+    const score = Math.max(0, Math.min(100, 60 + lobBonus - stepPenalty));
+    onMissionResult?.({
+      missionId: scenario.missionId,
+      gameId: scenario.gameId,
+      score,
+      outcome: 'completed',
+      stats: {
+        steps: stepsTakenRef.current,
+        lobPlots: lobErrors.length,
+        avgLobErrorDeg: Math.round(avgErr)
+      }
+    });
+  }, [onMissionResult]);
+
+  // Count every pace for the mission step penalty
+  const handleStep = (direction: 'north' | 'south' | 'east' | 'west') => {
+    stepsTakenRef.current += 1;
+    setMissionSteps(stepsTakenRef.current);
+    onStepCloser(direction);
+  };
 
   // Antenna azimuth (0 to 360 degrees, 0 = North, 90 = East)
   const [azimuthDeg, setAzimuthDeg] = useState(0);
@@ -51,8 +112,11 @@ export const SignalHuntModal: React.FC<SignalHuntModalProps> = ({
   let diffDeg = Math.abs(azimuthDeg - trueBearingDeg) % 360;
   if (diffDeg > 180) diffDeg = 360 - diffDeg;
   const angleDiffRad = (diffDeg * Math.PI) / 180;
-  // Beam lobe formula: cos(angleDiff/2)^4 gives high forward peak and deep side/back nulls
-  const directionalGain = Math.pow(Math.max(0, Math.cos(angleDiffRad / 2)), 3.8);
+  // Beam lobe formula: cos(angleDiff/2)^exponent gives high forward peak and
+  // deep side/back nulls. Mission scenarios tune the directivity — a yagi
+  // array is razor sharp while the attenuated loop sensor sweeps wide.
+  const beamExponent = scenarioRef.current?.beamExponent ?? 3.8;
+  const directionalGain = Math.pow(Math.max(0, Math.cos(angleDiffRad / 2)), beamExponent);
 
   // Proximity signal: inverted distance curve
   // Under 40m is 100%, 800m is ~10%
@@ -104,6 +168,11 @@ export const SignalHuntModal: React.FC<SignalHuntModalProps> = ({
 
   // Plot Line of Bearing (LOB) onto tactical radar
   const handlePlotBearing = () => {
+    // Track LOB accuracy vs the true bearing for mission triangulation scoring
+    let err = Math.abs(azimuthDeg - trueBearingDeg) % 360;
+    if (err > 180) err = 360 - err;
+    lobErrorsRef.current.push(err);
+
     const newBearing: BearingLine = {
       originX: 200, // Center of radar
       originY: 200,
@@ -121,6 +190,7 @@ export const SignalHuntModal: React.FC<SignalHuntModalProps> = ({
       soundEffects.playTriumphChime(0.5);
       confetti({ particleCount: 120, spread: 70, origin: { y: 0.6 } });
       onClaimVictory();
+      settleMission(); // mission settles exactly once, on transmitter capture
     }
   };
 
@@ -197,11 +267,12 @@ export const SignalHuntModal: React.FC<SignalHuntModalProps> = ({
     ctx.lineTo(cx + Math.cos(activeRad) * 180, cy + Math.sin(activeRad) * 180);
     ctx.stroke();
 
-    // Antenna cardioid beam cone
+    // Antenna cardioid beam cone (wider lobe for the attenuated loop sensor)
+    const lobeHalfWidth = 0.35 * (3.8 / beamExponent);
     ctx.fillStyle = 'rgba(56, 189, 248, 0.15)';
     ctx.beginPath();
     ctx.moveTo(cx, cy);
-    ctx.arc(cx, cy, 175, activeRad - 0.35, activeRad + 0.35);
+    ctx.arc(cx, cy, 175, activeRad - lobeHalfWidth, activeRad + lobeHalfWidth);
     ctx.closePath();
     ctx.fill();
 
@@ -281,6 +352,13 @@ export const SignalHuntModal: React.FC<SignalHuntModalProps> = ({
           </div>
         </div>
 
+        {/* Mission objective banner (World Expedition Command) */}
+        <MissionHUD
+          scenario={missionScenario}
+          progressLabel={isBeaconUnlocked ? 'Transmitter captured ✓' : `${Math.round(distanceMeters)}m away`}
+          secondaryLabel={`Steps ${missionSteps} • LOBs ${bearingPlots.length}`}
+        />
+
         {/* Main Workstation Layout */}
         <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-950">
           {/* LEFT: Tactical CRT Radar Screen */}
@@ -310,25 +388,25 @@ export const SignalHuntModal: React.FC<SignalHuntModalProps> = ({
               <span className="font-mono text-slate-400">Walk District:</span>
               <div className="flex items-center gap-1.5 font-bold font-mono">
                 <button
-                  onClick={() => onStepCloser('north')}
+                  onClick={() => handleStep('north')}
                   className="px-2.5 py-1 bg-slate-800 hover:bg-emerald-500/30 text-emerald-300 rounded border border-emerald-500/30 active:scale-95"
                 >
                   N ↑
                 </button>
                 <button
-                  onClick={() => onStepCloser('south')}
+                  onClick={() => handleStep('south')}
                   className="px-2.5 py-1 bg-slate-800 hover:bg-emerald-500/30 text-emerald-300 rounded border border-emerald-500/30 active:scale-95"
                 >
                   S ↓
                 </button>
                 <button
-                  onClick={() => onStepCloser('west')}
+                  onClick={() => handleStep('west')}
                   className="px-2.5 py-1 bg-slate-800 hover:bg-emerald-500/30 text-emerald-300 rounded border border-emerald-500/30 active:scale-95"
                 >
                   W ←
                 </button>
                 <button
-                  onClick={() => onStepCloser('east')}
+                  onClick={() => handleStep('east')}
                   className="px-2.5 py-1 bg-slate-800 hover:bg-emerald-500/30 text-emerald-300 rounded border border-emerald-500/30 active:scale-95"
                 >
                   E →

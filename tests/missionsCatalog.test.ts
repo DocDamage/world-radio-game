@@ -34,9 +34,21 @@ test('every expedition leg references an existing mission', () => {
   }
 });
 
-test('exactly the bicycle and boating missions are live (current slice)', () => {
+test('every mission in the catalog is wired live end-to-end', () => {
   const live = MISSION_CATALOG.filter(m => m.status === 'live').map(m => m.id).sort();
-  assert.deepEqual(live, ['bike-last-mile', 'boat-harbor-run']);
+  assert.deepEqual(live, [
+    'bike-last-mile',
+    'boat-harbor-run',
+    'buggy-solar-rally',
+    'chef-night-market',
+    'detective-missing-broadcast',
+    'dj-orbit-rooftop',
+    'fishing-field-journal',
+    'hunt-lost-relay',
+    'photo-correspondent',
+    'ski-mountain-courier',
+    'surf-swell-window'
+  ]);
 });
 
 test('every mission offers at least one approach choice', () => {

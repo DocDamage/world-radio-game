@@ -1,7 +1,9 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { X, Search, HelpCircle, CheckCircle2, Award, Zap } from 'lucide-react';
 import type { DetectiveState, RadioStation } from '../types';
 import { soundEffects } from '../services/audioEffects';
+import { MissionHUD } from './MissionHUD';
+import type { MissionScenario, MissionResultPayload } from '../missions/types';
 import confetti from 'canvas-confetti';
 
 interface DetectiveLabModalProps {
@@ -13,6 +15,10 @@ interface DetectiveLabModalProps {
   onNewMystery: () => void;
   mysteryClue: string;
   onAddCoins?: (amount: number) => void;
+  /** Active World Expedition mission scenario (null = free investigation) */
+  missionScenario?: MissionScenario | null;
+  /** Emitted exactly once when an active mission run settles */
+  onMissionResult?: (payload: MissionResultPayload) => void;
 }
 
 // Forensic profiles based on country keywords
@@ -64,7 +70,9 @@ export const DetectiveLabModal: React.FC<DetectiveLabModalProps> = ({
   onGuessCoords,
   onNewMystery,
   mysteryClue,
-  onAddCoins
+  onAddCoins,
+  missionScenario,
+  onMissionResult
 }) => {
   const mapCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const spectrumCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -78,6 +86,63 @@ export const DetectiveLabModal: React.FC<DetectiveLabModalProps> = ({
 
   const targetStation = detectiveState.targetStation || activeStation;
   const forensic = getForensicProfile(targetStation?.country || '');
+
+  // Mission context (World Expedition Command), read fresh by handlers.
+  const scenarioRef = useRef<MissionScenario | null | undefined>(undefined);
+  scenarioRef.current = missionScenario;
+  const missionSettledRef = useRef<boolean>(false);
+
+  // Reset mission bookkeeping once per open
+  useEffect(() => {
+    if (!isOpen) return;
+    missionSettledRef.current = false;
+  }, [isOpen]);
+
+  // Settle the active mission exactly once — only when the committed guess
+  // closes the case (within the scenario tolerance). Wild guesses never
+  // settle, so the investigation can simply continue with a new mystery.
+  const settleMission = useCallback(
+    (score: number, distKm: number) => {
+      const scenario = scenarioRef.current;
+      if (!scenario || missionSettledRef.current) return;
+      missionSettledRef.current = true;
+      onMissionResult?.({
+        missionId: scenario.missionId,
+        gameId: scenario.gameId,
+        score,
+        outcome: 'completed',
+        stats: {
+          offsetKm: distKm,
+          caseScore: score
+        }
+      });
+    },
+    [onMissionResult]
+  );
+
+  // The chosen investigation approach emphasizes its matching forensic leads
+  const clueFocus = missionScenario?.clueFocus;
+  const isPrimaryClue = (key: 'grid' | 'traffic' | 'script' | 'climate'): boolean | null => {
+    if (!clueFocus) return null;
+    return clueFocus === 'grid' ? key === 'grid' || key === 'traffic' : key === 'script' || key === 'climate';
+  };
+
+  const renderClueCard = (key: 'grid' | 'traffic' | 'script' | 'climate', label: string, value: string, valueClass: string) => {
+    const primary = isPrimaryClue(key);
+    return (
+      <div
+        className={`bg-slate-950/70 p-2 rounded-xl border ${
+          primary === true ? 'border-purple-400/60' : 'border-slate-800'
+        } ${primary === false ? 'opacity-60' : ''}`}
+      >
+        <span className="text-[10px] text-slate-500 block">
+          {label}
+          {primary === true && <span className="text-purple-400 font-bold"> ⭐ PRIMARY LEAD</span>}
+        </span>
+        <strong className={valueClass}>{value}</strong>
+      </div>
+    );
+  };
 
   // Reset state during render when a new mystery case starts (no cascading effect render)
   if (detectiveState.targetStation?.id !== prevStationId) {
@@ -356,6 +421,16 @@ export const DetectiveLabModal: React.FC<DetectiveLabModalProps> = ({
     setCoinsAwarded(coins);
     if (onAddCoins) onAddCoins(coins);
 
+    // Mission: the case settles only when the guess closes within the
+    // scenario tolerance (wild guesses never settle — just take a new case)
+    const scenario = scenarioRef.current;
+    if (scenario && !missionSettledRef.current) {
+      const missionScore = Math.max(0, Math.round(5000 - dist * 2));
+      if (dist <= (scenario.caseCloseRangeKm ?? 1250)) {
+        settleMission(missionScore, dist);
+      }
+    }
+
     onGuessCoords(selectedPin);
     soundEffects.playTriumphChime(0.4);
     confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
@@ -401,6 +476,13 @@ export const DetectiveLabModal: React.FC<DetectiveLabModalProps> = ({
           </div>
         </div>
 
+        {/* Mission objective banner (World Expedition Command) */}
+        <MissionHUD
+          scenario={missionScenario}
+          progressLabel={revealed ? `Case closed • ${distanceKm?.toLocaleString()} km off` : 'Pin the broadcast origin'}
+          secondaryLabel={missionScenario ? `Close within ${(missionScenario.caseCloseRangeKm ?? 1250).toLocaleString()} km` : undefined}
+        />
+
         {/* Workstation Content */}
         <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-950">
           {/* LEFT: Forensic Dossier & Audio Spectrum */}
@@ -426,22 +508,10 @@ export const DetectiveLabModal: React.FC<DetectiveLabModalProps> = ({
               </div>
 
               <div className="grid grid-cols-2 gap-2 text-xs font-mono">
-                <div className="bg-slate-950/70 p-2 rounded-xl border border-slate-800">
-                  <span className="text-[10px] text-slate-500 block">GRID FREQUENCY</span>
-                  <strong className="text-amber-300">{forensic.powerGridHz}</strong>
-                </div>
-                <div className="bg-slate-950/70 p-2 rounded-xl border border-slate-800">
-                  <span className="text-[10px] text-slate-500 block">TRAFFIC RULE</span>
-                  <strong className="text-cyan-300">{forensic.drivingSide}</strong>
-                </div>
-                <div className="bg-slate-950/70 p-2 rounded-xl border border-slate-800">
-                  <span className="text-[10px] text-slate-500 block">STREET SCRIPT</span>
-                  <strong className="text-purple-300">{forensic.writingScript}</strong>
-                </div>
-                <div className="bg-slate-950/70 p-2 rounded-xl border border-slate-800">
-                  <span className="text-[10px] text-slate-500 block">CLIMATE ZONE</span>
-                  <strong className="text-emerald-300">{forensic.climateZone}</strong>
-                </div>
+                {renderClueCard('grid', 'GRID FREQUENCY', forensic.powerGridHz, 'text-amber-300')}
+                {renderClueCard('traffic', 'TRAFFIC RULE', forensic.drivingSide, 'text-cyan-300')}
+                {renderClueCard('script', 'STREET SCRIPT', forensic.writingScript, 'text-purple-300')}
+                {renderClueCard('climate', 'CLIMATE ZONE', forensic.climateZone, 'text-emerald-300')}
               </div>
 
               {/* Mystery Commentary Clue */}

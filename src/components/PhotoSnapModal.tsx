@@ -1,7 +1,9 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Camera, X, MapPin, Radio, Eye, Download } from 'lucide-react';
 import { soundEffects } from '../services/audioEffects';
 import { gamepadManager } from '../services/gamepadManager';
+import { MissionHUD } from './MissionHUD';
+import type { MissionScenario, MissionResultPayload } from '../missions/types';
 import type { BackpackItem } from '../types';
 import confetti from 'canvas-confetti';
 
@@ -13,6 +15,10 @@ interface PhotoSnapModalProps {
   countryName: string;
   coords: { lat: number; lng: number };
   onSaveToBackpack: (item: BackpackItem) => void;
+  /** Active World Expedition mission scenario (null = free postcards) */
+  missionScenario?: MissionScenario | null;
+  /** Emitted exactly once when an active mission run settles */
+  onMissionResult?: (payload: MissionResultPayload) => void;
 }
 
 type PhotoFilter = 'vintage' | 'neon' | 'golden' | 'bw' | 'normal';
@@ -24,7 +30,9 @@ export const PhotoSnapModal: React.FC<PhotoSnapModalProps> = ({
   cityName,
   countryName,
   coords,
-  onSaveToBackpack
+  onSaveToBackpack,
+  missionScenario,
+  onMissionResult
 }) => {
   const [filter, setFilter] = useState<PhotoFilter>('golden');
   const [focalLength, setFocalLength] = useState<number>(35); // 24mm, 35mm, 50mm, 85mm
@@ -37,6 +45,38 @@ export const PhotoSnapModal: React.FC<PhotoSnapModalProps> = ({
   const [compositionFeedback, setCompositionFeedback] = useState<string>('');
 
   const hiddenCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // Mission context (World Expedition Command), read fresh by handlers.
+  const scenarioRef = useRef<MissionScenario | null | undefined>(undefined);
+  scenarioRef.current = missionScenario;
+  const missionSettledRef = useRef<boolean>(false);
+
+  // Reset mission bookkeeping once per open
+  useEffect(() => {
+    if (!isOpen) return;
+    missionSettledRef.current = false;
+  }, [isOpen]);
+
+  // Settle the active mission exactly once — only when a capture honors the
+  // composition brief. Off-brief shots and early exits never settle.
+  const settleMission = useCallback(
+    (compositionScore: number, focal: number) => {
+      const scenario = scenarioRef.current;
+      if (!scenario || missionSettledRef.current) return;
+      missionSettledRef.current = true;
+      onMissionResult?.({
+        missionId: scenario.missionId,
+        gameId: scenario.gameId,
+        score: Math.min(100, Math.round(compositionScore + (scenario.briefBonus ?? 0))),
+        outcome: 'completed',
+        stats: {
+          composition: compositionScore,
+          focalLength: focal
+        }
+      });
+    },
+    [onMissionResult]
+  );
 
   if (!isOpen) return null;
 
@@ -211,6 +251,16 @@ export const PhotoSnapModal: React.FC<PhotoSnapModalProps> = ({
     setPhotoScore(score);
     setCompositionFeedback(feedback);
 
+    // Mission: the run settles when the capture honors the composition brief
+    const scenario = scenarioRef.current;
+    if (scenario && !missionSettledRef.current) {
+      const inBrief =
+        focalLength >= (scenario.briefFocalMin ?? 24) && focalLength <= (scenario.briefFocalMax ?? 85);
+      if (inBrief) {
+        settleMission(score, focalLength);
+      }
+    }
+
     // Generate real image data URL
     const dataUrl = renderPostcardCanvas();
     setSavedDataUrl(dataUrl);
@@ -296,6 +346,17 @@ export const PhotoSnapModal: React.FC<PhotoSnapModalProps> = ({
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {/* Mission objective banner (World Expedition Command) */}
+        <MissionHUD
+          scenario={missionScenario}
+          progressLabel={`${focalLength}mm ƒ/${aperture}`}
+          secondaryLabel={
+            missionScenario
+              ? `Brief: ${missionScenario.briefFocalMin ?? 24}–${missionScenario.briefFocalMax ?? 85}mm`
+              : undefined
+          }
+        />
 
         {/* SLR Viewfinder Viewport */}
         <div className="relative h-80 bg-slate-950 overflow-hidden flex items-center justify-center">
@@ -420,7 +481,11 @@ export const PhotoSnapModal: React.FC<PhotoSnapModalProps> = ({
                         className={`py-1 rounded-lg font-bold transition border ${
                           focalLength === mm
                             ? 'bg-lime-400 text-slate-950 border-lime-300'
-                            : 'bg-slate-800 text-slate-300 border-slate-700'
+                            : missionScenario &&
+                                mm >= (missionScenario.briefFocalMin ?? 24) &&
+                                mm <= (missionScenario.briefFocalMax ?? 85)
+                              ? 'bg-slate-800 text-lime-300 border-lime-500/50'
+                              : 'bg-slate-800 text-slate-300 border-slate-700'
                         }`}
                       >
                         {mm}

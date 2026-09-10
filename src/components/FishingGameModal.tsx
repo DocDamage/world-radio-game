@@ -4,6 +4,8 @@ import { soundEffects } from '../services/audioEffects';
 import { gamepadManager } from '../services/gamepadManager';
 import { getRegionalFishSpecies } from '../services/activityData';
 import type { BackpackItem, FishSpecies, EnvironmentType } from '../types';
+import { MissionHUD } from './MissionHUD';
+import type { MissionScenario, MissionResultPayload } from '../missions/types';
 import confetti from 'canvas-confetti';
 
 interface FishingGameModalProps {
@@ -17,6 +19,10 @@ interface FishingGameModalProps {
   onEarnCoins: (amount: number) => void;
   highScore?: number;
   onUpdateHighScore?: (score: number) => void;
+  /** Active World Expedition mission scenario (null = free angling) */
+  missionScenario?: MissionScenario | null;
+  /** Emitted exactly once when an active mission run settles */
+  onMissionResult?: (payload: MissionResultPayload) => void;
 }
 
 type FishingPhase = 'aim' | 'cast' | 'waiting' | 'bite' | 'fight' | 'caught' | 'lost';
@@ -40,7 +46,9 @@ export const FishingGameModal: React.FC<FishingGameModalProps> = ({
   onAddBackpackItem,
   onEarnCoins,
   highScore = 0,
-  onUpdateHighScore
+  onUpdateHighScore,
+  missionScenario,
+  onMissionResult
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -70,6 +78,45 @@ export const FishingGameModal: React.FC<FishingGameModalProps> = ({
 
   const speciesList = getRegionalFishSpecies(countryName, biome);
 
+  // Mission context (World Expedition Command), read fresh by handlers.
+  const scenarioRef = useRef<MissionScenario | null | undefined>(undefined);
+  scenarioRef.current = missionScenario;
+  const missionSettledRef = useRef<boolean>(false);
+  const missionCatchRef = useRef<number>(0);
+  const missionScoreRef = useRef<number>(0);
+  const [missionCatches, setMissionCatches] = useState<number>(0);
+  const [missionJournalScore, setMissionJournalScore] = useState<number>(0);
+
+  // Reset mission bookkeeping once per open. The main sim-loop effect re-runs
+  // on every streak change (each landed/lost fish), so it must not own these.
+  useEffect(() => {
+    if (!isOpen) return;
+    missionSettledRef.current = false;
+    missionCatchRef.current = 0;
+    missionScoreRef.current = 0;
+    setMissionCatches(0);
+    setMissionJournalScore(0);
+  }, [isOpen]);
+
+  // Settle the active mission exactly once — only when the field journal is
+  // complete (catchTarget specimen landed). Lost lines and early exits never
+  // settle, so retrying is never punished and quitting cannot farm rewards.
+  const settleMission = useCallback(() => {
+    const scenario = scenarioRef.current;
+    if (!scenario || missionSettledRef.current) return;
+    missionSettledRef.current = true;
+    onMissionResult?.({
+      missionId: scenario.missionId,
+      gameId: scenario.gameId,
+      score: Math.round(missionScoreRef.current),
+      outcome: 'completed',
+      stats: {
+        catches: missionCatchRef.current,
+        journalScore: Math.round(missionScoreRef.current)
+      }
+    });
+  }, [onMissionResult]);
+
   // Handle successful catch
   const handleFishLanded = useCallback(() => {
     const sp = hookedFishRef.current?.species || speciesList[0];
@@ -86,6 +133,20 @@ export const FishingGameModal: React.FC<FishingGameModalProps> = ({
     }
 
     setActiveFish({ species: sp, weight, coins, isRecord });
+
+    // Mission scoring: rarity-weighted journal points plus a clean-landing
+    // streak bonus; the run settles when the journal is complete.
+    if (scenarioRef.current && !missionSettledRef.current) {
+      const base = sp.rarity === 'Legendary' ? 80 : sp.rarity === 'Rare' ? 50 : 30;
+      const streakBonus = 5 * Math.min(nextStreak - 1, 5);
+      missionScoreRef.current += base + streakBonus;
+      missionCatchRef.current += 1;
+      setMissionCatches(missionCatchRef.current);
+      setMissionJournalScore(Math.round(missionScoreRef.current));
+      if (missionCatchRef.current >= (scenarioRef.current.catchTarget ?? 5)) {
+        settleMission();
+      }
+    }
     soundEffects.playTriumphChime();
     gamepadManager.vibrate(300, 0.7, 0.5);
 
@@ -107,7 +168,7 @@ export const FishingGameModal: React.FC<FishingGameModalProps> = ({
       acquiredAt: new Date().toISOString(),
       priceCoins: coins
     });
-  }, [highScore, onAddBackpackItem, onEarnCoins, onUpdateHighScore, speciesList, streak, cityName, countryName, waterwayName]);
+  }, [highScore, onAddBackpackItem, onEarnCoins, onUpdateHighScore, speciesList, streak, cityName, countryName, waterwayName, settleMission]);
 
   // Cast the fishing line
   const handleCast = useCallback(() => {
@@ -132,7 +193,8 @@ export const FishingGameModal: React.FC<FishingGameModalProps> = ({
 
       phaseRef.current = 'waiting';
       setPhase('waiting');
-      biteWaitTimerRef.current = 2.5 + Math.random() * 3.5;
+      // Mission scenarios tune how long the bobber floats before a bite
+      biteWaitTimerRef.current = (2.5 + Math.random() * 3.5) * (scenarioRef.current?.biteDelayScale ?? 1);
     }, 450);
   }, []);
 
@@ -266,8 +328,12 @@ export const FishingGameModal: React.FC<FishingGameModalProps> = ({
 
       // 4. Fighting the hooked fish
       if (phaseRef.current === 'fight') {
-        // Natural fish thrashing pulls tension and progress
-        const fishStruggle = (Math.sin(currentTime * 0.008) * 14 + (Math.random() - 0.45) * 18) * dt;
+        // Natural fish thrashing pulls tension and progress (mission scenarios
+        // tune the fight harshness)
+        const fishStruggle =
+          (Math.sin(currentTime * 0.008) * 14 + (Math.random() - 0.45) * 18) *
+          dt *
+          (scenarioRef.current?.fightTensionScale ?? 1);
         const inSweetSpot = tensionRef.current >= 35 && tensionRef.current <= 65;
 
         if (reelInputRef.current) {
@@ -415,8 +481,15 @@ export const FishingGameModal: React.FC<FishingGameModalProps> = ({
           </div>
         </div>
 
+        {/* Mission objective banner (World Expedition Command) */}
+        <MissionHUD
+          scenario={missionScenario}
+          progressLabel={`${missionCatches} / ${missionScenario?.catchTarget ?? 5} specimen`}
+          secondaryLabel={`Journal ${missionJournalScore}`}
+        />
+
         {/* Live Simulation Canvas */}
-        <div className={`relative w-full h-[450px] bg-slate-950 flex items-center justify-center overflow-hidden ${screenShake ? 'ring-2 ring-rose-500 animate-pulse' : ''}`}>
+        <div className={`relative w-full h-[300px] sm:h-[450px] bg-slate-950 flex items-center justify-center overflow-hidden ${screenShake ? 'ring-2 ring-rose-500 animate-pulse' : ''}`}>
           <canvas
             ref={canvasRef}
             width={860}

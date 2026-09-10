@@ -552,6 +552,7 @@ export function App() {
     setMissionDebrief(null);
     setMissionScenario(null);
     setActivityMode('none'); // the finished game modal is still open underneath
+    setMode(m => (m === 'hunt' || m === 'detective' ? 'explore' : m));
   };
 
   // Continue an in-progress expedition: start the next leg's session and jump in
@@ -565,6 +566,14 @@ export function App() {
     if (!mission || mission.status !== 'live' || !active) return;
     missionSession.startMission(mission.id, mission.choices[0]?.id, active.expeditionId, active.stageIndex);
     setMissionScenario(buildScenario(mission, mission.choices[0]?.id));
+    if (mission.gameId === 'hunt') {
+      startSignalHunt();
+      return;
+    }
+    if (mission.gameId === 'detective') {
+      startDetectiveMystery();
+      return;
+    }
     setActivityMode(mission.gameId as ActivityMode);
   };
 
@@ -910,7 +919,7 @@ export function App() {
       {/* ARDF Radio Direction Finding (Fox Hunt) Simulation */}
       <SignalHuntModal
         isOpen={mode === 'hunt'}
-        onClose={() => setMode('explore')}
+        onClose={() => { setMode('explore'); setMissionScenario(null); }}
         huntState={huntState}
         activeStation={activeStation}
         onStepCloser={handleHuntStep}
@@ -919,18 +928,22 @@ export function App() {
           handleEarnCoins(100);
           setMode('explore');
         }}
+        missionScenario={missionScenario}
+        onMissionResult={handleMissionResult}
       />
 
       {/* Geospatial & Audio Forensics Crime Lab Modal */}
       <DetectiveLabModal
         isOpen={mode === 'detective'}
-        onClose={() => setMode('explore')}
+        onClose={() => { setMode('explore'); setMissionScenario(null); }}
         detectiveState={detectiveState}
         activeStation={activeStation}
         onGuessCoords={handleGuessDetective}
         onNewMystery={startDetectiveMystery}
         mysteryClue={mysteryClue}
         onAddCoins={handleEarnCoins}
+        missionScenario={missionScenario}
+        onMissionResult={handleMissionResult}
       />
 
       {/* Bottom Sticky Radio Player */}
@@ -1058,7 +1071,7 @@ export function App() {
       {/* 2D Depth Cross-Section Fishing Simulator */}
       <FishingGameModal
         isOpen={activityMode === 'fishing'}
-        onClose={() => setActivityMode('none')}
+        onClose={() => { setActivityMode('none'); setMissionScenario(null); }}
         cityName={activeStation?.place || selectedPlace?.title || 'Waterfront'}
         countryName={activeStation?.country || selectedPlace?.country || 'World'}
         waterwayName={locationEnvironment.waterwayName}
@@ -1067,57 +1080,67 @@ export function App() {
         onEarnCoins={handleEarnCoins}
         highScore={highScores.fishing}
         onUpdateHighScore={(s) => handleUpdateHighScore('fishing', s)}
+        missionScenario={missionScenario}
+        onMissionResult={handleMissionResult}
       />
 
       {/* Rooftop Vinyl DJ Radio Jam (Inland Metropolises) */}
       <RooftopBeatModal
         isOpen={activityMode === 'dj'}
-        onClose={() => setActivityMode('none')}
+        onClose={() => { setActivityMode('none'); setMissionScenario(null); }}
         cityName={activeStation?.place || selectedPlace?.title || 'City'}
         countryName={activeStation?.country || selectedPlace?.country || 'World'}
         stationName={activeStation?.name || 'Local Radio'}
         onEarnCoins={handleEarnCoins}
         highScore={highScores.dj}
         onUpdateHighScore={(s) => handleUpdateHighScore('dj', s)}
+        missionScenario={missionScenario}
+        onMissionResult={handleMissionResult}
       />
 
       {/* Desert Dune Buggy Cruiser (Desert Cities) */}
       <DesertBuggyModal
         isOpen={activityMode === 'buggy'}
-        onClose={() => setActivityMode('none')}
+        onClose={() => { setActivityMode('none'); setMissionScenario(null); }}
         cityName={activeStation?.place || selectedPlace?.title || 'Desert'}
         countryName={activeStation?.country || selectedPlace?.country || 'World'}
         onEarnCoins={handleEarnCoins}
         highScore={highScores.buggy}
         onUpdateHighScore={(s) => handleUpdateHighScore('buggy', s)}
+        missionScenario={missionScenario}
+        onMissionResult={handleMissionResult}
       />
 
       {/* Alpine Slalom & Mountain Descent (Mountain Cities) */}
       <AlpineDownhillModal
         isOpen={activityMode === 'ski'}
-        onClose={() => setActivityMode('none')}
+        onClose={() => { setActivityMode('none'); setMissionScenario(null); }}
         cityName={activeStation?.place || selectedPlace?.title || 'Alps'}
         countryName={activeStation?.country || selectedPlace?.country || 'World'}
         onEarnCoins={handleEarnCoins}
         highScore={highScores.ski}
         onUpdateHighScore={(s) => handleUpdateHighScore('ski', s)}
+        missionScenario={missionScenario}
+        onMissionResult={handleMissionResult}
       />
 
       {/* Ocean Swell Surfing Simulation (Coastal Ocean Cities) */}
       <SurfingGameModal
         isOpen={activityMode === 'surf'}
-        onClose={() => setActivityMode('none')}
+        onClose={() => { setActivityMode('none'); setMissionScenario(null); }}
         activeStation={activeStation}
         waterwayName={locationEnvironment.waterwayName}
         onAddCoins={handleEarnCoins}
         highScore={highScores.surf}
         onUpdateHighScore={(s) => handleUpdateHighScore('surf', s)}
+        missionScenario={missionScenario}
+        onMissionResult={handleMissionResult}
       />
 
       {/* Local Store & Market Modal */}
       <MarketShopModal
         isOpen={activityMode === 'market'}
-        onClose={() => setActivityMode('none')}
+        onClose={() => { setActivityMode('none'); setMissionScenario(null); }}
         cityName={activeStation?.place || 'Central'}
         countryName={activeStation?.country || 'World'}
         coins={coins}
@@ -1126,6 +1149,8 @@ export function App() {
         backpackItemIds={backpack.map(b => b.id)}
         backpack={backpack}
         onSellItem={handleSellItem}
+        missionScenario={missionScenario}
+        onMissionResult={handleMissionResult}
       />
 
       {/* Adventure Backpack & Inventory Modal */}
@@ -1140,12 +1165,14 @@ export function App() {
       {/* Postcard Photo Snap Modal */}
       <PhotoSnapModal
         isOpen={activityMode === 'photo'}
-        onClose={() => setActivityMode('none')}
+        onClose={() => { setActivityMode('none'); setMissionScenario(null); }}
         stationName={activeStation?.name || 'Local Radio'}
         cityName={activeStation?.place || 'City'}
         countryName={activeStation?.country || 'World'}
         coords={playerCoords}
         onSaveToBackpack={handleAddBackpackItem}
+        missionScenario={missionScenario}
+        onMissionResult={handleMissionResult}
       />
     </div>
   );

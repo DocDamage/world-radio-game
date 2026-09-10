@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Flame, X, Trophy, Wind, Sparkles } from 'lucide-react';
 import { soundEffects } from '../services/audioEffects';
 import { gamepadManager } from '../services/gamepadManager';
+import { MissionHUD } from './MissionHUD';
+import type { MissionScenario, MissionResultPayload } from '../missions/types';
 
 interface DesertBuggyModalProps {
   isOpen: boolean;
@@ -11,6 +13,10 @@ interface DesertBuggyModalProps {
   onEarnCoins: (amount: number) => void;
   highScore?: number;
   onUpdateHighScore?: (score: number) => void;
+  /** Active World Expedition mission scenario (null = free dune ride) */
+  missionScenario?: MissionScenario | null;
+  /** Emitted exactly once when an active mission run settles */
+  onMissionResult?: (payload: MissionResultPayload) => void;
 }
 
 type BuggyState = 'racing' | 'airborne' | 'crashed' | 'finished';
@@ -39,7 +45,9 @@ export const DesertBuggyModal: React.FC<DesertBuggyModalProps> = ({
   countryName,
   onEarnCoins,
   highScore = 0,
-  onUpdateHighScore
+  onUpdateHighScore,
+  missionScenario,
+  onMissionResult
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -51,7 +59,8 @@ export const DesertBuggyModal: React.FC<DesertBuggyModalProps> = ({
   const [nitroFuel, setNitroFuel] = useState<number>(100);
   const [buggyState, setBuggyState] = useState<BuggyState>('racing');
   const [airTimeBonus, setAirTimeBonus] = useState<number>(0);
-  const FINISH_DISTANCE = 3000;
+  // Rally length: mission scenarios tune it (dune ridge shortcut vs canyon wash)
+  const FINISH_DISTANCE = missionScenario?.finishDistance ?? 3000;
 
   // Mutable refs for 60fps loop
   const playerXRef = useRef<number>(0); // -0.85 to 0.85
@@ -76,6 +85,33 @@ export const DesertBuggyModal: React.FC<DesertBuggyModalProps> = ({
   highScoreRef.current = highScore;
   const onUpdateHighScoreRef = useRef(onUpdateHighScore);
   onUpdateHighScoreRef.current = onUpdateHighScore;
+
+  // Mission context (World Expedition Command), read fresh by the 60fps loop.
+  const scenarioRef = useRef<MissionScenario | null | undefined>(undefined);
+  scenarioRef.current = missionScenario;
+  const missionSettledRef = useRef<boolean>(false);
+
+  // Settle the active mission exactly once — only when the rally is completed
+  // (finish line reached). Crashes and early exits never settle, so retrying
+  // is never punished and quitting mid-rally cannot farm mission rewards.
+  const settleMission = useCallback(() => {
+    const scenario = scenarioRef.current;
+    if (!scenario || missionSettledRef.current) return;
+    missionSettledRef.current = true;
+    const w = scenario.scoreWeights || {};
+    const score = Math.round(coinsRef.current * (w.coin ?? 5) + healthRef.current * 100);
+    onMissionResult?.({
+      missionId: scenario.missionId,
+      gameId: scenario.gameId,
+      score,
+      outcome: 'completed',
+      stats: {
+        distance: Math.round(distanceRef.current),
+        coins: coinsRef.current,
+        hullIntegrity: healthRef.current
+      }
+    });
+  }, [onMissionResult]);
 
   const triggerBoost = useCallback(() => {
     if (nitroRef.current < 15 || buggyStateRef.current !== 'racing') return;
@@ -146,6 +182,7 @@ export const DesertBuggyModal: React.FC<DesertBuggyModalProps> = ({
     shakeRef.current = 0;
     hazardsRef.current = [];
     sandParticlesRef.current = [];
+    missionSettledRef.current = false;
     setHealth(3);
     setNitroFuel(100);
     setBuggyState('racing');
@@ -157,8 +194,20 @@ export const DesertBuggyModal: React.FC<DesertBuggyModalProps> = ({
     }
 
     function spawnHazard(z: number) {
-      const types: DuneHazard['type'][] = ['cell', 'cell', 'cell', 'rock', 'cactus', 'ramp'];
-      const type = types[Math.floor(Math.random() * types.length)];
+      // Mission scenarios tune the ramp/hazard mix via bounded density weights
+      // (base pool: 3 solar cells, 2 rocks/cacti, 1 ramp — identical odds to
+      // the original uniform array pick)
+      const rampWeight = 1 * (scenarioRef.current?.rampDensity ?? 1);
+      const hazardWeight = 2 * (scenarioRef.current?.hazardDensity ?? 1);
+      const roll = Math.random() * (3 + rampWeight + hazardWeight);
+      let type: DuneHazard['type'];
+      if (roll < 3) {
+        type = 'cell';
+      } else if (roll < 3 + hazardWeight) {
+        type = Math.random() < 0.5 ? 'rock' : 'cactus';
+      } else {
+        type = 'ramp';
+      }
       hazardsRef.current.push({
         x: (Math.random() - 0.5) * 1.6,
         z,
@@ -201,7 +250,8 @@ export const DesertBuggyModal: React.FC<DesertBuggyModalProps> = ({
         if (airTimerRef.current <= 0) {
           buggyStateRef.current = 'racing';
           setBuggyState('racing');
-          const bonus = Math.round(airTimerRef.current * -1 + 1.5) * 20;
+          // Mission scenarios tune the airtime bonus (dune-ridge lines pay more)
+          const bonus = Math.round((airTimerRef.current * -1 + 1.5) * 20 * (scenarioRef.current?.airBonusScale ?? 1));
           coinsRef.current += bonus;
           setAirTimeBonus(bonus);
           soundEffects.playCoinSound();
@@ -240,6 +290,7 @@ export const DesertBuggyModal: React.FC<DesertBuggyModalProps> = ({
         }
         soundEffects.playTriumphChime();
         gamepadManager.vibrate(300, 0.6, 0.4);
+        settleMission(); // mission settles exactly once, on rally completion
       }
 
       // Spawn new items
@@ -392,7 +443,7 @@ export const DesertBuggyModal: React.FC<DesertBuggyModalProps> = ({
     return () => {
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
     };
-  }, [isOpen]);
+  }, [isOpen, settleMission]);
 
   const handleExit = () => {
     if (coinsRef.current > 0 && !runSettledRef.current) {
@@ -439,8 +490,15 @@ export const DesertBuggyModal: React.FC<DesertBuggyModalProps> = ({
           </button>
         </div>
 
+        {/* Mission objective banner (World Expedition Command) */}
+        <MissionHUD
+          scenario={missionScenario}
+          progressLabel={`${distanceMeters} / ${FINISH_DISTANCE} m`}
+          secondaryLabel={`Salvage ${coinsCollected}¢ • Hull ${health}`}
+        />
+
         {/* Live Canvas */}
-        <div className="relative w-full h-[460px] bg-slate-950 flex items-center justify-center overflow-hidden">
+        <div className="relative w-full h-[300px] sm:h-[460px] bg-slate-950 flex items-center justify-center overflow-hidden">
           <canvas
             ref={canvasRef}
             width={860}

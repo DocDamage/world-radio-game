@@ -1,8 +1,10 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { ShoppingBag, Coins, X, Check, Sparkles, Flame, ChefHat, Trophy, ArrowRightLeft, Star } from 'lucide-react';
 import { getCityMarketItems } from '../services/activityData';
 import { soundEffects } from '../services/audioEffects';
 import { gamepadManager } from '../services/gamepadManager';
+import { MissionHUD } from './MissionHUD';
+import type { MissionScenario, MissionResultPayload } from '../missions/types';
 import type { BackpackItem, MarketItem } from '../types';
 import confetti from 'canvas-confetti';
 
@@ -17,6 +19,10 @@ interface MarketShopModalProps {
   backpackItemIds: string[];
   backpack?: BackpackItem[];
   onSellItem?: (itemId: string, priceCoins: number) => void;
+  /** Active World Expedition mission scenario (null = free shopping) */
+  missionScenario?: MissionScenario | null;
+  /** Emitted exactly once when an active mission run settles */
+  onMissionResult?: (payload: MissionResultPayload) => void;
 }
 
 export const MarketShopModal: React.FC<MarketShopModalProps> = ({
@@ -29,7 +35,9 @@ export const MarketShopModal: React.FC<MarketShopModalProps> = ({
   onAddBackpackItem,
   backpackItemIds,
   backpack = [],
-  onSellItem
+  onSellItem,
+  missionScenario,
+  onMissionResult
 }) => {
   const [activeTab, setActiveTab] = useState<'buy' | 'sell'>('buy');
   const [activePrepItem, setActivePrepItem] = useState<MarketItem | null>(null);
@@ -43,13 +51,60 @@ export const MarketShopModal: React.FC<MarketShopModalProps> = ({
 
   const prepTimerRef = useRef<number | null>(null);
 
+  // Mission context (World Expedition Command), read fresh by handlers.
+  const scenarioRef = useRef<MissionScenario | null | undefined>(undefined);
+  scenarioRef.current = missionScenario;
+  const missionSettledRef = useRef<boolean>(false);
+  const dishesServedRef = useRef<number>(0);
+  const missionScoreRef = useRef<number>(0);
+  const [missionDishes, setMissionDishes] = useState<number>(0);
+  const [missionKitchenScore, setMissionKitchenScore] = useState<number>(0);
+
+  // Reset mission bookkeeping once per open
+  useEffect(() => {
+    if (!isOpen) return;
+    missionSettledRef.current = false;
+    dishesServedRef.current = 0;
+    missionScoreRef.current = 0;
+    setMissionDishes(0);
+    setMissionKitchenScore(0);
+  }, [isOpen]);
+
+  // Settle the active mission exactly once — only when the crew order is
+  // complete (dishesTarget dishes served). Canceled preps and early exits
+  // never settle, so retrying is never punished.
+  const settleMission = useCallback(() => {
+    const scenario = scenarioRef.current;
+    if (!scenario || missionSettledRef.current) return;
+    missionSettledRef.current = true;
+    onMissionResult?.({
+      missionId: scenario.missionId,
+      gameId: scenario.gameId,
+      score: Math.round(missionScoreRef.current),
+      outcome: 'completed',
+      stats: {
+        dishes: dishesServedRef.current,
+        kitchenScore: Math.round(missionScoreRef.current)
+      }
+    });
+  }, [onMissionResult]);
+
+  // Mission scenarios may shrink the perfect/good timing zones toward their
+  // center (zoneScale < 1 = harder rush orders) — free play keeps originals.
+  const scaledZone = (lo: number, hi: number): [number, number] => {
+    const s = scenarioRef.current?.zoneScale ?? 1;
+    const c = (lo + hi) / 2;
+    return [c - (c - lo) * s, c + (hi - c) * s];
+  };
+
   // Live Skillet Temperature & Timing Oscillation
   useEffect(() => {
     if (!isOpen || !activePrepItem || prepStep === 'done') return;
 
     const interval = setInterval(() => {
       setSizzleTemp(prev => {
-        let next = prev + tempDirection * (prepStep === 'flip' ? 6 : 4);
+        // Mission scenarios tune how fast the skillet temperature swings
+        let next = prev + tempDirection * (prepStep === 'flip' ? 6 : 4) * (scenarioRef.current?.tempSwingScale ?? 1);
         if (next >= 95) {
           next = 95;
           setTempDirection(-1);
@@ -123,9 +178,11 @@ export const MarketShopModal: React.FC<MarketShopModalProps> = ({
     gamepadManager.vibrate(60, 0.5, 0.3);
 
     if (prepStep === 'heat') {
-      // Optimal Sear Zone: 65°C to 85°C
-      const isPerfect = sizzleTemp >= 65 && sizzleTemp <= 85;
-      const isGood = sizzleTemp >= 50 && sizzleTemp <= 92;
+      // Optimal Sear Zone: 65°C to 85°C (mission scenarios may tighten it)
+      const [pLo, pHi] = scaledZone(65, 85);
+      const [gLo, gHi] = scaledZone(50, 92);
+      const isPerfect = sizzleTemp >= pLo && sizzleTemp <= pHi;
+      const isGood = sizzleTemp >= gLo && sizzleTemp <= gHi;
       const stepPts = isPerfect ? 35 : isGood ? 20 : 10;
       setCookingScore(s => s + stepPts);
       setLastStepFeedback(isPerfect ? '🔥 PERFECT SEAR (+35)' : isGood ? 'Sizzled nicely (+20)' : 'Over/under-seared (+10)');
@@ -135,9 +192,11 @@ export const MarketShopModal: React.FC<MarketShopModalProps> = ({
       setPrepProgress(50);
       setSizzleTemp(25);
     } else if (prepStep === 'flip') {
-      // Optimal Flip Zone: 50% to 75%
-      const isPerfect = sizzleTemp >= 50 && sizzleTemp <= 75;
-      const isGood = sizzleTemp >= 35 && sizzleTemp <= 88;
+      // Optimal Flip Zone: 50% to 75% (mission scenarios may tighten it)
+      const [pLo, pHi] = scaledZone(50, 75);
+      const [gLo, gHi] = scaledZone(35, 88);
+      const isPerfect = sizzleTemp >= pLo && sizzleTemp <= pHi;
+      const isGood = sizzleTemp >= gLo && sizzleTemp <= gHi;
       const stepPts = isPerfect ? 35 : isGood ? 20 : 10;
       setCookingScore(s => s + stepPts);
       setLastStepFeedback(isPerfect ? '✨ GOLDEN AIR FLIP (+35)' : isGood ? 'Solid toss (+20)' : 'Clumsy flip (+10)');
@@ -147,8 +206,9 @@ export const MarketShopModal: React.FC<MarketShopModalProps> = ({
       setPrepProgress(80);
       setSizzleTemp(20);
     } else if (prepStep === 'season') {
-      // Optimal Season Zone: 45% to 70%
-      const isPerfect = sizzleTemp >= 45 && sizzleTemp <= 70;
+      // Optimal Season Zone: 45% to 70% (mission scenarios may tighten it)
+      const [pLo, pHi] = scaledZone(45, 70);
+      const isPerfect = sizzleTemp >= pLo && sizzleTemp <= pHi;
       const stepPts = isPerfect ? 30 : 15;
       const finalScore = cookingScore + stepPts;
       setCookingScore(finalScore);
@@ -158,6 +218,17 @@ export const MarketShopModal: React.FC<MarketShopModalProps> = ({
 
       setPrepStep('done');
       setPrepProgress(100);
+
+      // Mission progress: every finished dish counts toward the crew order
+      if (scenarioRef.current && !missionSettledRef.current) {
+        missionScoreRef.current += Math.min(100, finalScore);
+        dishesServedRef.current += 1;
+        setMissionDishes(dishesServedRef.current);
+        setMissionKitchenScore(Math.round(missionScoreRef.current));
+        if (dishesServedRef.current >= (scenarioRef.current.dishesTarget ?? 2)) {
+          settleMission();
+        }
+      }
 
       if (stars === 3) {
         soundEffects.playCrowdCheer(2.5, 0.2);
@@ -170,7 +241,7 @@ export const MarketShopModal: React.FC<MarketShopModalProps> = ({
         soundEffects.playTriumphChime();
       }
 
-      // Award master chef item to backpack
+      // Award master chef item to backpack (rush orders pay a premium)
       onAddBackpackItem({
         id: `chef-${Date.now()}`,
         name: `${stars === 3 ? '★★★ Master' : stars === 2 ? '★★ Artisan' : '★ Fresh'} ${activePrepItem.name}`,
@@ -180,7 +251,7 @@ export const MarketShopModal: React.FC<MarketShopModalProps> = ({
         country: countryName,
         description: `Handcrafted with street artisans in ${cityName}. Score: ${finalScore}/100. ${activePrepItem.description}`,
         acquiredAt: new Date().toISOString(),
-        priceCoins: Math.round(activePrepItem.priceCoins * 1.5)
+        priceCoins: Math.round(activePrepItem.priceCoins * 1.5 * (scenarioRef.current?.coinBonusScale ?? 1))
       });
     }
   };
@@ -202,7 +273,7 @@ export const MarketShopModal: React.FC<MarketShopModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 select-none">
-      <div className="relative w-full max-w-xl bg-gradient-to-b from-slate-900 to-slate-950 border border-amber-400/40 rounded-3xl p-6 shadow-2xl flex flex-col gap-4 text-slate-100 max-h-[85vh]">
+      <div className="relative w-full max-w-xl bg-gradient-to-b from-slate-900 to-slate-950 border border-amber-400/40 rounded-3xl p-4 sm:p-6 shadow-2xl flex flex-col gap-4 text-slate-100 max-h-[88vh] overflow-y-auto overscroll-contain">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
           <div className="flex items-center gap-3">
@@ -255,6 +326,13 @@ export const MarketShopModal: React.FC<MarketShopModalProps> = ({
             <Coins className="w-4 h-4" /> {coins} Coins
           </div>
         </div>
+
+        {/* Mission objective banner (World Expedition Command) */}
+        <MissionHUD
+          scenario={missionScenario}
+          progressLabel={`${missionDishes} / ${missionScenario?.dishesTarget ?? 2} dishes served`}
+          secondaryLabel={`Kitchen ${missionKitchenScore}`}
+        />
 
         {/* Active Artisan Cooking/Crafting Minigame View */}
         {activePrepItem ? (

@@ -1,7 +1,9 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Disc, Music, X, Volume2, Sparkles, Sliders, Trophy, Flame, Zap } from 'lucide-react';
 import { soundEffects } from '../services/audioEffects';
 import { gamepadManager } from '../services/gamepadManager';
+import { MissionHUD } from './MissionHUD';
+import type { MissionScenario, MissionResultPayload } from '../missions/types';
 import confetti from 'canvas-confetti';
 
 interface RooftopBeatModalProps {
@@ -13,6 +15,10 @@ interface RooftopBeatModalProps {
   onEarnCoins: (amount: number) => void;
   highScore?: number;
   onUpdateHighScore?: (score: number) => void;
+  /** Active World Expedition mission scenario (null = free jam) */
+  missionScenario?: MissionScenario | null;
+  /** Emitted exactly once when an active mission run settles */
+  onMissionResult?: (payload: MissionResultPayload) => void;
 }
 
 interface BeatPad {
@@ -43,7 +49,9 @@ export const RooftopBeatModal: React.FC<RooftopBeatModalProps> = ({
   stationName,
   onEarnCoins,
   highScore = 0,
-  onUpdateHighScore
+  onUpdateHighScore,
+  missionScenario,
+  onMissionResult
 }) => {
   const [playMode, setPlayMode] = useState<'challenge' | 'jam'>('challenge');
   const [activePads, setActivePads] = useState<Record<string, boolean>>({});
@@ -69,19 +77,58 @@ export const RooftopBeatModal: React.FC<RooftopBeatModalProps> = ({
   const runSettledRef = useRef<boolean>(false);
   const nextBeatTimeRef = useRef<number>(0);
 
+  // Mission context (World Expedition Command), read fresh by handlers.
+  const scenarioRef = useRef<MissionScenario | null | undefined>(undefined);
+  scenarioRef.current = missionScenario;
+  const missionSettledRef = useRef<boolean>(false);
+  const onBeatHitsRef = useRef<number>(0);
+  const [missionHits, setMissionHits] = useState<number>(0);
+
+  // Reset mission bookkeeping once per open
+  useEffect(() => {
+    if (!isOpen) return;
+    missionSettledRef.current = false;
+    onBeatHitsRef.current = 0;
+    setMissionHits(0);
+  }, [isOpen]);
+
+  // Settle the active mission exactly once — only when the set's on-beat hit
+  // target is reached. Offbeat-heavy sets and early exits never settle.
+  const settleMission = useCallback(() => {
+    const scenario = scenarioRef.current;
+    if (!scenario || missionSettledRef.current) return;
+    missionSettledRef.current = true;
+    onMissionResult?.({
+      missionId: scenario.missionId,
+      gameId: scenario.gameId,
+      score: Math.round(scoreRef.current),
+      outcome: 'completed',
+      stats: {
+        onBeatHits: onBeatHitsRef.current,
+        sessionScore: Math.round(scoreRef.current)
+      }
+    });
+  }, [onMissionResult]);
+
+  // Beat clock interval derived from the scenario tempo (default 120 BPM)
+  const beatIntervalMs = useMemo(
+    () => (missionScenario?.bpm ? Math.round(60000 / missionScenario.bpm) : 500),
+    [missionScenario]
+  );
+
   // Beat Clock (120 BPM = 500ms per beat)
   useEffect(() => {
     if (!isOpen) return;
 
     const interval = setInterval(() => {
       const now = performance.now();
-      nextBeatTimeRef.current = now + 500;
+      nextBeatTimeRef.current = now + beatIntervalMs;
       setBeatPulse(true);
       setTimeout(() => setBeatPulse(false), 140);
-    }, 500);
+    }, beatIntervalMs);
 
     return () => clearInterval(interval);
-  }, [isOpen]);
+  }, [isOpen, beatIntervalMs]);
 
   // Combo multiplier based on streak
   const comboMultiplier = isFeverMode
@@ -121,10 +168,11 @@ export const RooftopBeatModal: React.FC<RooftopBeatModalProps> = ({
     gamepadManager.vibrate(40, 0.3, 0.2);
 
     if (playMode === 'challenge') {
-      // Beat timing evaluation: compare against 500ms quantized beat
-      const diffToBeats = Math.abs((now % 500) - 250); // offset from beat center
-      const isPerfect = diffToBeats < 80;
-      const isGood = diffToBeats < 150;
+      // Beat timing evaluation against the (mission-tuned) beat clock
+      const windowScale = scenarioRef.current?.timingWindowScale ?? 1;
+      const diffToBeats = Math.abs((now % beatIntervalMs) - beatIntervalMs / 2); // offset from beat center
+      const isPerfect = diffToBeats < 80 * windowScale;
+      const isGood = diffToBeats < 150 * windowScale;
 
       if (isPerfect) {
         setLastTimingFeedback('🔥 PERFECT (+50)');
@@ -143,6 +191,15 @@ export const RooftopBeatModal: React.FC<RooftopBeatModalProps> = ({
       } else {
         setLastTimingFeedback('⚠️ OFFBEAT');
         setCombo(0);
+      }
+
+      // Mission progress: every on-beat hit advances the rooftop set
+      if ((isPerfect || isGood) && scenarioRef.current && !missionSettledRef.current) {
+        onBeatHitsRef.current += 1;
+        setMissionHits(onBeatHitsRef.current);
+        if (onBeatHitsRef.current >= (scenarioRef.current.targetBeats ?? 48)) {
+          settleMission();
+        }
       }
     } else {
       // Free Jam mode: creative play
@@ -166,7 +223,7 @@ export const RooftopBeatModal: React.FC<RooftopBeatModalProps> = ({
       }
       return next;
     });
-  }, [playMode, comboMultiplier, highScore, isFeverMode, onUpdateHighScore]);
+  }, [playMode, comboMultiplier, highScore, isFeverMode, onUpdateHighScore, settleMission, beatIntervalMs]);
 
   // Keyboard shortcut listener with full input isolation
   useEffect(() => {
@@ -373,6 +430,13 @@ export const RooftopBeatModal: React.FC<RooftopBeatModalProps> = ({
             </span>
           </div>
         </div>
+
+        {/* Mission objective banner (World Expedition Command) */}
+        <MissionHUD
+          scenario={missionScenario}
+          progressLabel={`${missionHits} / ${missionScenario?.targetBeats ?? 48} on-beat`}
+          secondaryLabel={`Set score ${sessionScore}`}
+        />
 
         {/* Main DJ Deck Content */}
         <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6 items-center">

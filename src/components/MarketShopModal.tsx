@@ -45,7 +45,7 @@ export const MarketShopModal: React.FC<MarketShopModalProps> = ({
 
   // Live Skillet Temperature & Timing Oscillation
   useEffect(() => {
-    if (!activePrepItem || prepStep === 'done') return;
+    if (!isOpen || !activePrepItem || prepStep === 'done') return;
 
     const interval = setInterval(() => {
       setSizzleTemp(prev => {
@@ -62,7 +62,17 @@ export const MarketShopModal: React.FC<MarketShopModalProps> = ({
     }, 45);
 
     return () => clearInterval(interval);
-  }, [activePrepItem, prepStep, tempDirection]);
+  }, [isOpen, activePrepItem, prepStep, tempDirection]);
+
+  // Clean up state when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      setActivePrepItem(null);
+      setPrepStep('heat');
+      setCookingScore(0);
+      setLastStepFeedback('');
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -115,9 +125,10 @@ export const MarketShopModal: React.FC<MarketShopModalProps> = ({
     if (prepStep === 'heat') {
       // Optimal Sear Zone: 65°C to 85°C
       const isPerfect = sizzleTemp >= 65 && sizzleTemp <= 85;
-      const stepPts = isPerfect ? 35 : sizzleTemp >= 50 && sizzleTemp <= 92 ? 20 : 10;
+      const isGood = sizzleTemp >= 50 && sizzleTemp <= 92;
+      const stepPts = isPerfect ? 35 : isGood ? 20 : 10;
       setCookingScore(s => s + stepPts);
-      setLastStepFeedback(isPerfect ? '🔥 PERFECT SEAR (+35)' : 'Sizzled nicely (+20)');
+      setLastStepFeedback(isPerfect ? '🔥 PERFECT SEAR (+35)' : isGood ? 'Sizzled nicely (+20)' : 'Over/under-seared (+10)');
       soundEffects.playSkilletSizzle(0.8, 0.2);
 
       setPrepStep('flip');
@@ -126,9 +137,10 @@ export const MarketShopModal: React.FC<MarketShopModalProps> = ({
     } else if (prepStep === 'flip') {
       // Optimal Flip Zone: 50% to 75%
       const isPerfect = sizzleTemp >= 50 && sizzleTemp <= 75;
-      const stepPts = isPerfect ? 35 : sizzleTemp >= 35 && sizzleTemp <= 88 ? 20 : 10;
+      const isGood = sizzleTemp >= 35 && sizzleTemp <= 88;
+      const stepPts = isPerfect ? 35 : isGood ? 20 : 10;
       setCookingScore(s => s + stepPts);
-      setLastStepFeedback(isPerfect ? '✨ GOLDEN AIR FLIP (+35)' : 'Solid toss (+20)');
+      setLastStepFeedback(isPerfect ? '✨ GOLDEN AIR FLIP (+35)' : isGood ? 'Solid toss (+20)' : 'Clumsy flip (+10)');
       soundEffects.playRadarPing(1100, 0.15);
 
       setPrepStep('season');

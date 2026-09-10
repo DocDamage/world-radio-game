@@ -88,9 +88,11 @@ export const SurfingGameModal: React.FC<SurfingGameModalProps> = ({
   const trickCooldownRef = useRef(0);
   const floaterTimeRef = useRef(0);
   const trickTimerRef = useRef(0);
+  const runSettledRef = useRef(false);
 
   // Reset Surfer
   const resetRun = useCallback(() => {
+    runSettledRef.current = false;
     surferRef.current = {
       x: 320,
       y: 260,
@@ -137,6 +139,7 @@ export const SurfingGameModal: React.FC<SurfingGameModalProps> = ({
     if (!isOpen) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      e.stopPropagation();
       if (['ArrowUp', 'KeyW'].includes(e.code)) keysRef.current.up = true;
       if (['ArrowDown', 'KeyS'].includes(e.code)) keysRef.current.down = true;
       if (['ArrowLeft', 'KeyA'].includes(e.code)) keysRef.current.left = true;
@@ -148,6 +151,7 @@ export const SurfingGameModal: React.FC<SurfingGameModalProps> = ({
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
+      e.stopPropagation();
       if (['ArrowUp', 'KeyW'].includes(e.code)) keysRef.current.up = false;
       if (['ArrowDown', 'KeyS'].includes(e.code)) keysRef.current.down = false;
       if (['ArrowLeft', 'KeyA'].includes(e.code)) keysRef.current.left = false;
@@ -360,7 +364,10 @@ export const SurfingGameModal: React.FC<SurfingGameModalProps> = ({
           setScore(finalScore);
           const earned = Math.max(25, Math.round(finalScore / 40));
           setCoinsEarned(earned);
-          if (onAddCoins) onAddCoins(earned);
+          if (onAddCoins && !runSettledRef.current) {
+            onAddCoins(earned);
+            runSettledRef.current = true;
+          }
           if (onUpdateHighScore && finalScore > highScore) {
             onUpdateHighScore(finalScore);
           }

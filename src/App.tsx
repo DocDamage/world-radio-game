@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, lazy } from 'react';
 import { 
   Radio, 
   Globe, 
@@ -8,40 +8,49 @@ import {
   BookOpen, 
   Bot, 
   Search, 
-  Shuffle,
-  Backpack,
-  Coins,
-  Zap
+  Shuffle, 
+  Backpack, 
+  Coins, 
+  Zap,
+  Compass,
+  Eye
 } from 'lucide-react';
 import type { RadioStation, AppMode, SignalHuntState, DetectiveState, PassportEntry, Place, BackpackItem, ActivityMode } from './types';
 import { fetchTopStations, CURATED_STATIONS, loadStationsSnapshot } from './services/radioApi';
 import { resolveLocationEnvironment } from './services/activityData';
-import { WorldGlobe } from './components/WorldGlobe';
-import { StreetWalker } from './components/StreetWalker';
 import { RadioPlayerBar } from './components/RadioPlayerBar';
-import { SignalHuntModal } from './components/SignalHuntModal';
-import { DetectiveLabModal } from './components/DetectiveLabModal';
-import { PassportModal } from './components/PassportModal';
-import { GeminiGuidePanel } from './components/GeminiGuidePanel';
-import { CityDrawer } from './components/CityDrawer';
-import { CommandPalette } from './components/CommandPalette';
 import { GamepadHUD } from './components/GamepadHUD';
-import { Dlss5Modal } from './components/Dlss5Modal';
 import { Dlss5Overlay } from './components/Dlss5Overlay';
-import { BicycleGameModal } from './components/BicycleGameModal';
-import { BoatingGameModal } from './components/BoatingGameModal';
-import { FishingGameModal } from './components/FishingGameModal';
-import { MarketShopModal } from './components/MarketShopModal';
-import { BackpackModal } from './components/BackpackModal';
-import { PhotoSnapModal } from './components/PhotoSnapModal';
-import { RooftopBeatModal } from './components/RooftopBeatModal';
-import { DesertBuggyModal } from './components/DesertBuggyModal';
-import { AlpineDownhillModal } from './components/AlpineDownhillModal';
-import { SurfingGameModal } from './components/SurfingGameModal';
 import { soundEffects } from './services/audioEffects';
 import { streamRecorder } from './services/recorder';
 import { gamepadManager } from './services/gamepadManager';
 import { dlss5 } from './services/dlss5Engine';
+import { travelerState } from './services/travelerState';
+import { inputManager } from './services/inputManager';
+import type { GameId } from './missions/types';
+
+// Code-split heavy 3D Globe, Street View, and Mini-Game Modals to optimize bundle size
+const WorldGlobe = lazy(() => import('./components/WorldGlobe').then(m => ({ default: m.WorldGlobe })));
+const StreetWalker = lazy(() => import('./components/StreetWalker').then(m => ({ default: m.StreetWalker })));
+const SignalHuntModal = lazy(() => import('./components/SignalHuntModal').then(m => ({ default: m.SignalHuntModal })));
+const DetectiveLabModal = lazy(() => import('./components/DetectiveLabModal').then(m => ({ default: m.DetectiveLabModal })));
+const PassportModal = lazy(() => import('./components/PassportModal').then(m => ({ default: m.PassportModal })));
+const GeminiGuidePanel = lazy(() => import('./components/GeminiGuidePanel').then(m => ({ default: m.GeminiGuidePanel })));
+const CityDrawer = lazy(() => import('./components/CityDrawer').then(m => ({ default: m.CityDrawer })));
+const CommandPalette = lazy(() => import('./components/CommandPalette').then(m => ({ default: m.CommandPalette })));
+const Dlss5Modal = lazy(() => import('./components/Dlss5Modal').then(m => ({ default: m.Dlss5Modal })));
+const BicycleGameModal = lazy(() => import('./components/BicycleGameModal').then(m => ({ default: m.BicycleGameModal })));
+const BoatingGameModal = lazy(() => import('./components/BoatingGameModal').then(m => ({ default: m.BoatingGameModal })));
+const FishingGameModal = lazy(() => import('./components/FishingGameModal').then(m => ({ default: m.FishingGameModal })));
+const MarketShopModal = lazy(() => import('./components/MarketShopModal').then(m => ({ default: m.MarketShopModal })));
+const BackpackModal = lazy(() => import('./components/BackpackModal').then(m => ({ default: m.BackpackModal })));
+const PhotoSnapModal = lazy(() => import('./components/PhotoSnapModal').then(m => ({ default: m.PhotoSnapModal })));
+const RooftopBeatModal = lazy(() => import('./components/RooftopBeatModal').then(m => ({ default: m.RooftopBeatModal })));
+const DesertBuggyModal = lazy(() => import('./components/DesertBuggyModal').then(m => ({ default: m.DesertBuggyModal })));
+const AlpineDownhillModal = lazy(() => import('./components/AlpineDownhillModal').then(m => ({ default: m.AlpineDownhillModal })));
+const SurfingGameModal = lazy(() => import('./components/SurfingGameModal').then(m => ({ default: m.SurfingGameModal })));
+const WorldMonitorModal = lazy(() => import('./components/WorldMonitorModal').then(m => ({ default: m.WorldMonitorModal })));
+const MissionBoard = lazy(() => import('./components/MissionBoard').then(m => ({ default: m.MissionBoard })));
 
 export function App() {
   const [stations, setStations] = useState<RadioStation[]>(CURATED_STATIONS);
@@ -49,30 +58,45 @@ export function App() {
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [mode, setMode] = useState<AppMode>('explore');
   
+  // Keep latest references for stable callbacks
+  const stationsRef = useRef(stations);
+  stationsRef.current = stations;
+  const activeStationRef = useRef(activeStation);
+  activeStationRef.current = activeStation;
+
   // Selected City & City Drawer
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
   const [cityStations, setCityStations] = useState<RadioStation[]>([]);
+  const cityStationsRef = useRef(cityStations);
+  cityStationsRef.current = cityStations;
+
   const [isCityDrawerOpen, setIsCityDrawerOpen] = useState<boolean>(false);
   const [isPaletteOpen, setIsPaletteOpen] = useState<boolean>(false);
+  const [isPassportOpen, setIsPassportOpen] = useState<boolean>(false);
+  const [isBackpackOpen, setIsBackpackOpen] = useState<boolean>(false);
+  const [isGuideOpen, setIsGuideOpen] = useState<boolean>(false);
+  const [isDlssModalOpen, setIsDlssModalOpen] = useState<boolean>(false);
+  const [isMissionBoardOpen, setIsMissionBoardOpen] = useState<boolean>(false);
+  const [isWorldMonitorOpen, setIsWorldMonitorOpen] = useState<boolean>(false);
 
-  // Favorites
-  const [favorites, setFavorites] = useState<Record<string, RadioStation>>(() => {
-    const saved = localStorage.getItem('world_radio_favorites');
-    return saved ? JSON.parse(saved) : {};
-  });
+  // Synchronize traveler state reactively
+  const [traveler, setTraveler] = useState(() => travelerState.getState());
+  useEffect(() => {
+    return travelerState.subscribe(() => {
+      setTraveler({ ...travelerState.getState() });
+    });
+  }, []);
+
+  const coins = traveler.coins;
+  const backpack = traveler.backpack;
+  const passportEntries = traveler.passport;
+  const favorites = traveler.favorites;
+  const highScores = traveler.highScores;
 
   // Gemini API Key (saved in localStorage)
   const [geminiApiKey, setGeminiApiKey] = useState<string>(() => {
     return localStorage.getItem('world_radio_gemini_key') || '';
   });
-  const [isGuideOpen, setIsGuideOpen] = useState<boolean>(false);
-
-  // Passport Stamps
-  const [passportEntries, setPassportEntries] = useState<PassportEntry[]>(() => {
-    const saved = localStorage.getItem('world_radio_passport');
-    return saved ? JSON.parse(saved) : [];
-  });
-  const [isPassportOpen, setIsPassportOpen] = useState<boolean>(false);
 
   // Street Player position
   const [playerCoords, setPlayerCoords] = useState<{ lat: number; lng: number }>({
@@ -91,7 +115,7 @@ export function App() {
     score: 0
   });
 
-  // Radio Detective Mystery State
+  // Radio Detective Mystery State (with complete mystery isolation)
   const [detectiveState, setDetectiveState] = useState<DetectiveState>({
     targetStation: null,
     guessedPos: null,
@@ -111,99 +135,95 @@ export function App() {
 
   // DLSS 5 State
   const [gpuInfo] = useState(() => dlss5.detectGpu());
-  const [isDlssModalOpen, setIsDlssModalOpen] = useState<boolean>(false);
   const [dlssConfigVersion, setDlssConfigVersion] = useState<number>(0);
 
-  // Activities & Inventory State
+  // Activities State
   const [activityMode, setActivityMode] = useState<ActivityMode>('none');
-  const [coins, setCoins] = useState<number>(() => {
-    const saved = localStorage.getItem('world_radio_coins');
-    return saved ? parseInt(saved, 10) : 250;
-  });
-  const [backpack, setBackpack] = useState<BackpackItem[]>(() => {
-    const saved = localStorage.getItem('world_radio_backpack');
-    return saved ? JSON.parse(saved) : [];
-  });
-  const [isBackpackOpen, setIsBackpackOpen] = useState<boolean>(false);
 
-  // Minigame High Scores persisted across sessions
-  const [highScores, setHighScores] = useState<{
-    bike: number;
-    boat: number;
-    fishing: number;
-    dj: number;
-    buggy: number;
-    ski: number;
-    surf: number;
-  }>(() => {
-    const saved = localStorage.getItem('world_radio_highscores');
-    return saved
-      ? JSON.parse(saved)
-      : { bike: 0, boat: 0, fishing: 0, dj: 0, buggy: 0, ski: 0, surf: 0 };
-  });
+  // Sync Input Manager states
+  useEffect(() => {
+    inputManager.setStreetActive(mode === 'street');
+  }, [mode]);
 
-  const handleUpdateHighScore = useCallback((game: 'bike' | 'boat' | 'fishing' | 'dj' | 'buggy' | 'ski' | 'surf', score: number) => {
-    setHighScores(prev => {
-      if (score <= (prev[game] || 0)) return prev;
-      const next = { ...prev, [game]: score };
-      localStorage.setItem('world_radio_highscores', JSON.stringify(next));
-      return next;
-    });
+  useEffect(() => {
+    inputManager.setActiveGame(activityMode !== 'none' ? activityMode : null);
+  }, [activityMode]);
+
+  useEffect(() => {
+    if (isPaletteOpen) inputManager.registerModalOpen('palette');
+    else inputManager.registerModalClose('palette');
+  }, [isPaletteOpen]);
+
+  useEffect(() => {
+    if (isCityDrawerOpen) inputManager.registerModalOpen('city');
+    else inputManager.registerModalClose('city');
+  }, [isCityDrawerOpen]);
+
+  useEffect(() => {
+    if (isPassportOpen) inputManager.registerModalOpen('passport');
+    else inputManager.registerModalClose('passport');
+  }, [isPassportOpen]);
+
+  useEffect(() => {
+    if (isBackpackOpen) inputManager.registerModalOpen('backpack');
+    else inputManager.registerModalClose('backpack');
+  }, [isBackpackOpen]);
+
+  useEffect(() => {
+    if (isMissionBoardOpen) inputManager.registerModalOpen('mission');
+    else inputManager.registerModalClose('mission');
+  }, [isMissionBoardOpen]);
+
+  useEffect(() => {
+    if (isWorldMonitorOpen) inputManager.registerModalOpen('monitor');
+    else inputManager.registerModalClose('monitor');
+  }, [isWorldMonitorOpen]);
+
+  useEffect(() => {
+    if (isGuideOpen) inputManager.registerModalOpen('guide');
+    else inputManager.registerModalClose('guide');
+  }, [isGuideOpen]);
+
+  useEffect(() => {
+    if (isDlssModalOpen) inputManager.registerModalOpen('dlss');
+    else inputManager.registerModalClose('dlss');
+  }, [isDlssModalOpen]);
+
+  // High score updater
+  const handleUpdateHighScore = useCallback((game: string, score: number) => {
+    travelerState.updateHighScore(game, score);
   }, []);
 
   // Dynamic Location Environment & Biome (Coastal, River, Urban, Desert, Alpine)
   const locationEnvironment = useMemo(() => {
     const placeName = selectedPlace?.title || activeStation?.place || '';
     const countryName = selectedPlace?.country || activeStation?.country || '';
-    const lat = activeStation?.geo_lat || (selectedPlace ? selectedPlace.geo[1] : 0);
-    const lng = activeStation?.geo_long || (selectedPlace ? selectedPlace.geo[0] : 0);
+    const lat = activeStation?.geo_lat ?? (selectedPlace ? selectedPlace.geo[1] : 0);
+    const lng = activeStation?.geo_long ?? (selectedPlace ? selectedPlace.geo[0] : 0);
     return resolveLocationEnvironment(placeName, countryName, lat, lng);
   }, [selectedPlace, activeStation]);
 
   // Coins management
   const handleEarnCoins = useCallback((amount: number) => {
-    setCoins(c => {
-      const next = c + amount;
-      localStorage.setItem('world_radio_coins', next.toString());
-      return next;
-    });
+    travelerState.addCoins(amount);
   }, []);
 
   const handleDeductCoins = useCallback((amount: number): boolean => {
-    if (coins < amount) return false;
-    setCoins(c => {
-      const next = c - amount;
-      localStorage.setItem('world_radio_coins', next.toString());
-      return next;
-    });
-    return true;
-  }, [coins]);
+    return travelerState.deductCoins(amount);
+  }, []);
 
   // Backpack item management
   const handleAddBackpackItem = useCallback((item: BackpackItem) => {
-    setBackpack(b => {
-      const next = [item, ...b];
-      localStorage.setItem('world_radio_backpack', JSON.stringify(next));
-      return next;
-    });
+    travelerState.settleReward(item.id, { backpackItem: item });
   }, []);
 
   const handleRemoveBackpackItem = useCallback((id: string) => {
-    setBackpack(b => {
-      const next = b.filter(i => i.id !== id);
-      localStorage.setItem('world_radio_backpack', JSON.stringify(next));
-      return next;
-    });
+    travelerState.sellItem(id);
   }, []);
 
-  const handleSellItem = useCallback((id: string, priceCoins: number) => {
-    setBackpack(b => {
-      const next = b.filter(i => i.id !== id);
-      localStorage.setItem('world_radio_backpack', JSON.stringify(next));
-      return next;
-    });
-    handleEarnCoins(priceCoins);
-  }, [handleEarnCoins]);
+  const handleSellItem = useCallback((id: string) => {
+    travelerState.sellItem(id);
+  }, []);
 
 
   // Initial load of worldwide stations
@@ -239,23 +259,13 @@ export function App() {
     localStorage.setItem('world_radio_gemini_key', key);
   };
 
-  // Toggle Favorite
+  // Toggle Favorite (single source of truth: travelerState store)
   const handleToggleFavorite = (station: RadioStation) => {
-    setFavorites(prev => {
-      const next = { ...prev };
-      if (next[station.id]) {
-        delete next[station.id];
-      } else {
-        next[station.id] = station;
-      }
-      localStorage.setItem('world_radio_favorites', JSON.stringify(next));
-      return next;
-    });
+    travelerState.toggleFavorite(station);
   };
 
-  // Add a station visit to Passport
+  // Add a station visit to Passport (store handles duplicate stamps + XP award)
   const stampPassport = (station: RadioStation) => {
-    if (passportEntries.some(e => e.stationUuid === station.id)) return;
     const newEntry: PassportEntry = {
       stationUuid: station.id,
       stationName: station.name,
@@ -266,9 +276,7 @@ export function App() {
       visitedAt: new Date().toISOString(),
       coordinates: { lat: station.geo_lat, lng: station.geo_long }
     };
-    const updated = [newEntry, ...passportEntries];
-    setPassportEntries(updated);
-    localStorage.setItem('world_radio_passport', JSON.stringify(updated));
+    travelerState.addPassportEntry(newEntry);
   };
 
   // Select station
@@ -460,6 +468,20 @@ export function App() {
     }));
   };
 
+  // Launch a mini-game from the Mission Board.
+  // 'hunt' and 'detective' are world modes; the rest are activity modals.
+  const handleLaunchGame = (gameId: GameId) => {
+    if (gameId === 'hunt') {
+      startSignalHunt();
+      return;
+    }
+    if (gameId === 'detective') {
+      startDetectiveMystery();
+      return;
+    }
+    setActivityMode(gameId as ActivityMode);
+  };
+
   // Global Keyboard Shortcuts
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     // Open command palette with Ctrl+K, Cmd+K, or /
@@ -495,6 +517,8 @@ export function App() {
       setIsPassportOpen(false);
       setIsGuideOpen(false);
       setIsPaletteOpen(false);
+      setIsMissionBoardOpen(false);
+      setIsWorldMonitorOpen(false);
     } else if (e.key === 'ArrowRight') {
       handleNextStation();
     } else if (e.key === 'ArrowLeft') {
@@ -666,6 +690,15 @@ export function App() {
             <BookOpen className="w-3.5 h-3.5" /> Passport ({passportEntries.length})
           </button>
 
+          {/* World Expedition Command (Missions & Expeditions) */}
+          <button
+            onClick={() => setIsMissionBoardOpen(true)}
+            className="px-3 py-1.5 bg-slate-900/80 hover:bg-slate-800 text-lime-300 border border-lime-500/30 rounded-xl text-xs font-bold transition flex items-center gap-1.5"
+            title="World Expedition Command — mission board & expeditions"
+          >
+            <Compass className="w-3.5 h-3.5 text-lime-400" /> Missions
+          </button>
+
           {/* Gemini AI Guide */}
           <button
             onClick={() => setIsGuideOpen(!isGuideOpen)}
@@ -690,6 +723,15 @@ export function App() {
           >
             <Zap className={`w-3.5 h-3.5 ${dlss5.getConfig().enabled ? 'fill-emerald-400 text-emerald-400' : 'text-slate-500'}`} />
             <span>DLSS 5</span>
+          </button>
+
+          {/* World Monitor & Camera Wall */}
+          <button
+            onClick={() => setIsWorldMonitorOpen(true)}
+            className="px-3 py-1.5 bg-slate-900/80 hover:bg-slate-800 text-emerald-300 border border-emerald-500/30 rounded-xl text-xs font-bold transition flex items-center gap-1.5"
+            title="World Monitor — public cameras & live seismic feed"
+          >
+            <Eye className="w-3.5 h-3.5 text-emerald-400" /> Monitor
           </button>
         </div>
       </header>
@@ -869,6 +911,24 @@ export function App() {
         onClose={() => setIsDlssModalOpen(false)}
         gpuInfo={gpuInfo}
         onConfigChange={() => setDlssConfigVersion(v => v + 1)}
+      />
+
+      {/* World Expedition Command (Missions & Expeditions) */}
+      <MissionBoard
+        isOpen={isMissionBoardOpen}
+        onClose={() => setIsMissionBoardOpen(false)}
+        currentCity={activeStation?.place || selectedPlace?.title || ''}
+        currentCountry={activeStation?.country || selectedPlace?.country || ''}
+        onLaunchGame={handleLaunchGame}
+      />
+
+      {/* World Monitor & Camera Wall */}
+      <WorldMonitorModal
+        isOpen={isWorldMonitorOpen}
+        onClose={() => setIsWorldMonitorOpen(false)}
+        activeCity={activeStation?.place || selectedPlace?.title || ''}
+        activeCountry={activeStation?.country || selectedPlace?.country || ''}
+        activeStationName={activeStation?.name || ''}
       />
 
       {/* Full 2.5D Road Cycling Arcade Game */}

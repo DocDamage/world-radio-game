@@ -31,6 +31,7 @@ interface RadioPlayerBarProps {
   isRecording: boolean;
   recordDuration: number;
   onToggleRecord: () => void;
+  isMysteryMode?: boolean;
 }
 
 export const RadioPlayerBar: React.FC<RadioPlayerBarProps> = ({
@@ -45,13 +46,18 @@ export const RadioPlayerBar: React.FC<RadioPlayerBarProps> = ({
   onToggleFavorite,
   isRecording,
   recordDuration,
-  onToggleRecord
+  onToggleRecord,
+  isMysteryMode = false
 }) => {
   const audioRef = useRef<HTMLAudioElement>(null);
-  const [volume, setVolume] = useState<number>(0.8);
+  const [volume, setVolume] = useState<number>(() => {
+    const saved = localStorage.getItem('world_radio_volume');
+    return saved ? parseFloat(saved) : 0.8;
+  });
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [streamError, setStreamError] = useState<boolean>(false);
   const [isLoadingStream, setIsLoadingStream] = useState<boolean>(false);
+  const [isBuffering, setIsBuffering] = useState<boolean>(false);
 
   // Expose audio element for recording
   useEffect(() => {
@@ -61,33 +67,42 @@ export const RadioPlayerBar: React.FC<RadioPlayerBarProps> = ({
   // When station changes, trigger radio static burst & load stream
   useEffect(() => {
     if (!station) return;
-    setStreamError(false);
-    setIsLoadingStream(true);
     soundEffects.playStaticBurst(0.25, 0.12);
-
-    // Media Session API Integration (from OpenRadio)
-    if ('mediaSession' in navigator) {
-      navigator.mediaSession.metadata = new MediaMetadata({
-        title: station.name,
-        artist: [station.place, station.country].filter(Boolean).join(', ') || 'World Radio',
-        album: 'OpenRadio 3D Explorer',
-      });
-      navigator.mediaSession.setActionHandler('play', () => onTogglePlay());
-      navigator.mediaSession.setActionHandler('pause', () => onTogglePlay());
-      if (onPrevStation) navigator.mediaSession.setActionHandler('previoustrack', onPrevStation);
-      if (onNextStation) navigator.mediaSession.setActionHandler('nexttrack', onNextStation);
-    }
 
     if (audioRef.current) {
       audioRef.current.src = station.streamUrl;
       if (isPlaying) {
         audioRef.current.play().catch(() => {
           setStreamError(true);
-          setIsLoadingStream(false);
         });
       }
     }
-  }, [station]);
+  }, [station, isPlaying]);
+
+  // Media Session API Integration
+  useEffect(() => {
+    if (!station || !('mediaSession' in navigator)) return;
+
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: isMysteryMode ? 'Classified Mystery Frequency' : station.name,
+      artist: isMysteryMode ? 'Unknown Location' : ([station.place, station.country].filter(Boolean).join(', ') || 'World Radio'),
+      album: 'OpenRadio 3D Explorer',
+    });
+
+    navigator.mediaSession.setActionHandler('play', onTogglePlay);
+    navigator.mediaSession.setActionHandler('pause', onTogglePlay);
+    if (onPrevStation) navigator.mediaSession.setActionHandler('previoustrack', onPrevStation);
+    if (onNextStation) navigator.mediaSession.setActionHandler('nexttrack', onNextStation);
+
+    return () => {
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.setActionHandler('play', null);
+        navigator.mediaSession.setActionHandler('pause', null);
+        navigator.mediaSession.setActionHandler('previoustrack', null);
+        navigator.mediaSession.setActionHandler('nexttrack', null);
+      }
+    };
+  }, [station, isMysteryMode, onTogglePlay, onPrevStation, onNextStation]);
 
   // Sync isPlaying state
   useEffect(() => {
@@ -99,11 +114,24 @@ export const RadioPlayerBar: React.FC<RadioPlayerBarProps> = ({
     }
   }, [isPlaying]);
 
-  // Sync volume
+  // Sync and persist volume
   useEffect(() => {
     if (!audioRef.current) return;
     audioRef.current.volume = isMuted ? 0 : volume;
+    localStorage.setItem('world_radio_volume', volume.toString());
   }, [volume, isMuted]);
+
+  const handleRetryStream = () => {
+    setStreamError(false);
+    setIsLoadingStream(true);
+    if (audioRef.current && station) {
+      audioRef.current.src = station.streamUrl;
+      audioRef.current.play().catch(() => {
+        setStreamError(true);
+        setIsLoadingStream(false);
+      });
+    }
+  };
 
   // Format record timer (MM:SS)
   const formatTimer = (sec: number) => {
@@ -132,10 +160,24 @@ export const RadioPlayerBar: React.FC<RadioPlayerBarProps> = ({
     <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 w-11/12 max-w-3xl bg-slate-900/90 backdrop-blur-xl border border-lime-400/30 rounded-3xl p-3 px-5 shadow-2xl shadow-black/80 text-slate-100 flex items-center justify-between gap-4">
       <audio
         ref={audioRef}
-        onCanPlay={() => setIsLoadingStream(false)}
+        onLoadStart={() => {
+          setIsLoadingStream(true);
+          setStreamError(false);
+        }}
+        onWaiting={() => setIsBuffering(true)}
+        onPlaying={() => {
+          setIsBuffering(false);
+          setIsLoadingStream(false);
+          setStreamError(false);
+        }}
+        onCanPlay={() => {
+          setIsLoadingStream(false);
+          setIsBuffering(false);
+        }}
         onError={() => {
           setStreamError(true);
           setIsLoadingStream(false);
+          setIsBuffering(false);
         }}
       />
 
@@ -156,22 +198,51 @@ export const RadioPlayerBar: React.FC<RadioPlayerBarProps> = ({
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <h3 className="font-bold text-sm text-slate-100 truncate">
-              {station ? station.name : 'Select a Station on the Globe'}
+              {isMysteryMode
+                ? '🕵️ Classified Frequency'
+                : station
+                ? station.name
+                : 'Select a Station on the Globe'}
             </h3>
             {isPlaying && (
               <span className="text-[10px] font-mono font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30 px-1.5 py-0.5 rounded">
                 ON AIR
               </span>
             )}
-            {streamError && (
-              <span className="flex items-center gap-1 text-[10px] text-amber-400 bg-amber-950/80 px-2 py-0.5 rounded border border-amber-500/30">
-                <AlertCircle className="w-3 h-3" /> Stream Offline
+            {isBuffering && isPlaying && !streamError && (
+              <span className="text-[10px] font-mono bg-sky-950 text-sky-400 border border-sky-500/30 px-1.5 py-0.5 rounded animate-pulse">
+                BUFFERING
               </span>
+            )}
+            {streamError && (
+              <div className="flex items-center gap-1.5">
+                <span className="flex items-center gap-1 text-[10px] text-rose-300 bg-rose-950/80 px-2 py-0.5 rounded border border-rose-500/40">
+                  <AlertCircle className="w-3 h-3 text-rose-400" /> Stream Unavailable
+                </span>
+                <button
+                  onClick={handleRetryStream}
+                  className="text-[10px] bg-slate-800 hover:bg-slate-700 text-lime-400 px-2 py-0.5 rounded border border-slate-700"
+                >
+                  Retry
+                </button>
+                {onNextStation && (
+                  <button
+                    onClick={onNextStation}
+                    className="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-0.5 rounded border border-slate-700"
+                  >
+                    Next Station
+                  </button>
+                )}
+              </div>
             )}
           </div>
           <div className="flex items-center gap-2 mt-0.5">
             <p className="text-xs text-slate-400 truncate">
-              {station ? `${station.place ? station.place + ', ' : ''}${station.country}` : 'Explore worldwide broadcasts in 3D'}
+              {isMysteryMode
+                ? 'Location hidden for Detective Investigation'
+                : station
+                ? `${station.place ? station.place + ', ' : ''}${station.country}`
+                : 'Explore worldwide broadcasts in 3D'}
             </p>
             {/* Live Audio Equalizer Waveform */}
             {isPlaying && !streamError && (

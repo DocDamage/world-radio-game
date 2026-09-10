@@ -66,7 +66,7 @@ export const BicycleGameModal: React.FC<BicycleGameModalProps> = ({
   const curveRef = useRef<number>(0);
   const targetCurveRef = useRef<number>(0);
   const obstaclesRef = useRef<Obstacle[]>([]);
-  const lastTimeRef = useRef<number>(performance.now());
+  const lastTimeRef = useRef<number>(0);
   const animationFrameRef = useRef<number | null>(null);
   const steerInputRef = useRef<number>(0);
   const pedalTimerRef = useRef<number>(0);
@@ -75,7 +75,9 @@ export const BicycleGameModal: React.FC<BicycleGameModalProps> = ({
   const comboDecayTimerRef = useRef<number>(0);
   const draftTimerRef = useRef<number>(0);
   const isDraftingRef = useRef<boolean>(false);
+  const nearMissRef = useRef<number>(0);
   const shakeRef = useRef<number>(0);
+  const runSettledRef = useRef<boolean>(false);
 
   // Sound and bell
   const ringBell = useCallback(() => {
@@ -112,6 +114,7 @@ export const BicycleGameModal: React.FC<BicycleGameModalProps> = ({
     if (!isOpen) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      e.stopPropagation();
       if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft') {
         steerInputRef.current = -1;
       } else if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') {
@@ -131,6 +134,7 @@ export const BicycleGameModal: React.FC<BicycleGameModalProps> = ({
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
+      e.stopPropagation();
       if ((e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft') && steerInputRef.current === -1) {
         steerInputRef.current = 0;
       } else if ((e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') && steerInputRef.current === 1) {
@@ -253,7 +257,7 @@ export const BicycleGameModal: React.FC<BicycleGameModalProps> = ({
         if (distanceRef.current >= FINISH_DISTANCE) {
           gameStateRef.current = 'finished';
           setGameState('finished');
-          const bonusCoins = 50 + Math.round(nearMissCount * 3);
+          const bonusCoins = 50 + Math.round(nearMissRef.current * 3);
           coinsRef.current += bonusCoins;
           setCoinsCollected(coinsRef.current);
           if (onUpdateHighScore) {
@@ -394,8 +398,12 @@ export const BicycleGameModal: React.FC<BicycleGameModalProps> = ({
     };
   }, [isOpen, biome, highScore, onUpdateHighScore]);
 
-  // Restart Run
+  // Restart Run (settles any earned coins from prior attempt before restarting)
   const handleRestart = () => {
+    if (coinsRef.current > 0 && !runSettledRef.current) {
+      onEarnCoins(coinsRef.current);
+      runSettledRef.current = true;
+    }
     speedRef.current = 14;
     obstaclesRef.current = [];
     distanceRef.current = 0;
@@ -406,6 +414,8 @@ export const BicycleGameModal: React.FC<BicycleGameModalProps> = ({
     comboDecayTimerRef.current = 0;
     draftTimerRef.current = 0;
     isDraftingRef.current = false;
+    runSettledRef.current = false;
+    nearMissRef.current = 0;
     gameStateRef.current = 'riding';
     setGameState('riding');
     setSpeed(14);
@@ -416,13 +426,14 @@ export const BicycleGameModal: React.FC<BicycleGameModalProps> = ({
     setIsDrafting(false);
   };
 
-  // Award coins on modal close
+  // Award coins on modal close (guaranteed once-only)
   const handleExit = () => {
-    if (coinsCollected > 0) {
-      onEarnCoins(coinsCollected);
+    if (coinsRef.current > 0 && !runSettledRef.current) {
+      onEarnCoins(coinsRef.current);
+      runSettledRef.current = true;
     }
-    if (onUpdateHighScore && distanceMeters > highScore) {
-      onUpdateHighScore(distanceMeters);
+    if (onUpdateHighScore && distanceRef.current > highScore) {
+      onUpdateHighScore(Math.round(distanceRef.current));
     }
     onClose();
   };

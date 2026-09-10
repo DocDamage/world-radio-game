@@ -45,6 +45,7 @@ export const RooftopBeatModal: React.FC<RooftopBeatModalProps> = ({
   highScore = 0,
   onUpdateHighScore
 }) => {
+  const [playMode, setPlayMode] = useState<'challenge' | 'jam'>('challenge');
   const [activePads, setActivePads] = useState<Record<string, boolean>>({});
   const [scratchAngle, setScratchAngle] = useState<number>(0);
   const [isScratching, setIsScratching] = useState<boolean>(false);
@@ -57,12 +58,30 @@ export const RooftopBeatModal: React.FC<RooftopBeatModalProps> = ({
   const [combo, setCombo] = useState<number>(0);
   const [crowdHype, setCrowdHype] = useState<number>(15); // 0 - 100
   const [isFeverMode, setIsFeverMode] = useState<boolean>(false);
+  const [beatPulse, setBeatPulse] = useState<boolean>(false);
+  const [lastTimingFeedback, setLastTimingFeedback] = useState<string>('');
 
   const lastScratchYRef = useRef<number>(0);
   const coinsRef = useRef<number>(0);
   const lastBeatTimeRef = useRef<number>(0);
   const feverTimerRef = useRef<number | null>(null);
   const scoreRef = useRef<number>(0);
+  const runSettledRef = useRef<boolean>(false);
+  const nextBeatTimeRef = useRef<number>(0);
+
+  // Beat Clock (120 BPM = 500ms per beat)
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const interval = setInterval(() => {
+      const now = performance.now();
+      nextBeatTimeRef.current = now + 500;
+      setBeatPulse(true);
+      setTimeout(() => setBeatPulse(false), 140);
+    }, 500);
+
+    return () => clearInterval(interval);
+  }, [isOpen]);
 
   // Combo multiplier based on streak
   const comboMultiplier = isFeverMode
@@ -101,56 +120,60 @@ export const RooftopBeatModal: React.FC<RooftopBeatModalProps> = ({
     }
     gamepadManager.vibrate(40, 0.3, 0.2);
 
-    // Combo logic: reset if idle > 2.2 seconds
-    const timeDelta = (now - lastBeatTimeRef.current) / 1000;
-    lastBeatTimeRef.current = now;
+    if (playMode === 'challenge') {
+      // Beat timing evaluation: compare against 500ms quantized beat
+      const diffToBeats = Math.abs((now % 500) - 250); // offset from beat center
+      const isPerfect = diffToBeats < 80;
+      const isGood = diffToBeats < 150;
 
-    let nextCombo = 1;
-    if (timeDelta <= 2.2) {
-      nextCombo = combo + 1;
+      if (isPerfect) {
+        setLastTimingFeedback('🔥 PERFECT (+50)');
+        setCombo(c => c + 1);
+        const pts = 50 * comboMultiplier;
+        scoreRef.current += pts;
+        setSessionScore(scoreRef.current);
+        setCrowdHype(h => Math.min(100, h + 4));
+      } else if (isGood) {
+        setLastTimingFeedback('✨ GOOD (+25)');
+        setCombo(c => c + 1);
+        const pts = 25 * comboMultiplier;
+        scoreRef.current += pts;
+        setSessionScore(scoreRef.current);
+        setCrowdHype(h => Math.min(100, h + 2));
+      } else {
+        setLastTimingFeedback('⚠️ OFFBEAT');
+        setCombo(0);
+      }
+    } else {
+      // Free Jam mode: creative play
+      setLastTimingFeedback('FREE JAM');
+      scoreRef.current += 15;
+      setSessionScore(scoreRef.current);
+      setCrowdHype(h => Math.min(100, h + 1.5));
     }
-    setCombo(nextCombo);
-
-    // Calculate points: base 50 × combo multiplier
-    const curMultiplier = isFeverMode
-      ? (nextCombo >= 20 ? 16 : nextCombo >= 12 ? 8 : nextCombo >= 6 ? 4 : 2)
-      : (nextCombo >= 20 ? 8 : nextCombo >= 12 ? 4 : nextCombo >= 6 ? 2 : 1);
-
-    const pts = 50 * curMultiplier;
-    scoreRef.current += pts;
-    setSessionScore(scoreRef.current);
 
     if (scoreRef.current > highScore && onUpdateHighScore) {
       onUpdateHighScore(scoreRef.current);
     }
 
-    // Boost crowd hype
-    setCrowdHype(h => {
-      const next = Math.min(100, h + 3.5);
-      if (next >= 100 && !isFeverMode) {
-        triggerFeverMode();
-      }
-      return next;
-    });
-
     setBeatCount(b => {
       const next = b + 1;
-      if (next % 10 === 0) {
-        // Award jam bonus coins (doubled during fever)
-        const bonus = isFeverMode ? 20 : 10;
+      if (next % 12 === 0 && coinsRef.current < 45) {
+        const bonus = isFeverMode ? 15 : 10;
         coinsRef.current += bonus;
         setCoinsEarned(coinsRef.current);
         soundEffects.playCoinSound();
       }
       return next;
     });
-  }, [combo, isFeverMode, highScore, onUpdateHighScore, triggerFeverMode]);
+  }, [playMode, comboMultiplier, highScore, isFeverMode, onUpdateHighScore]);
 
-  // Keyboard shortcut listener
+  // Keyboard shortcut listener with full input isolation
   useEffect(() => {
     if (!isOpen) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      e.stopPropagation();
       const key = e.key.toUpperCase();
       const pad = BEAT_PADS.find(p => p.key === key);
       if (pad) {
@@ -168,12 +191,10 @@ export const RooftopBeatModal: React.FC<RooftopBeatModalProps> = ({
     if (!isOpen) return;
 
     const interval = setInterval(() => {
-      // Decay crowd hype if not in fever mode
       if (!isFeverMode) {
         setCrowdHype(h => Math.max(10, h - 1.5));
       }
 
-      // Check combo timeout
       const now = performance.now();
       if (lastBeatTimeRef.current > 0 && (now - lastBeatTimeRef.current) > 2400) {
         setCombo(0);
@@ -183,14 +204,15 @@ export const RooftopBeatModal: React.FC<RooftopBeatModalProps> = ({
     return () => clearInterval(interval);
   }, [isOpen, isFeverMode]);
 
-  // Scratch turntable drag handlers
-  const handleTurntableMouseDown = (e: React.MouseEvent) => {
+  // Scratch turntable pointer drag handlers (supports mouse + touch)
+  const handleTurntablePointerDown = (e: React.PointerEvent) => {
     setIsScratching(true);
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
     lastScratchYRef.current = e.clientY;
     soundEffects.playStaticBurst(0.08, 0.2);
   };
 
-  const handleTurntableMouseMove = (e: React.MouseEvent) => {
+  const handleTurntablePointerMove = (e: React.PointerEvent) => {
     if (!isScratching) return;
     const dy = e.clientY - lastScratchYRef.current;
     lastScratchYRef.current = e.clientY;
@@ -200,8 +222,7 @@ export const RooftopBeatModal: React.FC<RooftopBeatModalProps> = ({
       soundEffects.playStaticBurst(0.04, 0.15);
       gamepadManager.vibrate(30, 0.2, 0.1);
 
-      // Scratching adds points and hype
-      scoreRef.current += 15;
+      scoreRef.current += 10;
       setSessionScore(scoreRef.current);
       setCrowdHype(h => {
         const next = Math.min(100, h + 1.2);
@@ -213,13 +234,17 @@ export const RooftopBeatModal: React.FC<RooftopBeatModalProps> = ({
     }
   };
 
-  const handleTurntableMouseUp = () => {
+  const handleTurntablePointerUp = (e: React.PointerEvent) => {
     setIsScratching(false);
+    try {
+      (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {}
   };
 
   const handleExit = () => {
-    if (coinsRef.current > 0) {
+    if (coinsRef.current > 0 && !runSettledRef.current) {
       onEarnCoins(coinsRef.current);
+      runSettledRef.current = true;
     }
     if (scoreRef.current > highScore && onUpdateHighScore) {
       onUpdateHighScore(scoreRef.current);
@@ -286,6 +311,43 @@ export const RooftopBeatModal: React.FC<RooftopBeatModalProps> = ({
               <span className="font-bold text-purple-300 text-sm">{sessionScore.toLocaleString()} pts</span>
             </div>
 
+            {/* Mode Switcher */}
+            <div className="flex bg-slate-900 p-0.5 rounded-xl border border-slate-800">
+              <button
+                onClick={() => setPlayMode('challenge')}
+                className={`px-2.5 py-0.5 rounded-lg text-[11px] font-bold transition ${
+                  playMode === 'challenge'
+                    ? 'bg-purple-500 text-white'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Beat Challenge
+              </button>
+              <button
+                onClick={() => setPlayMode('jam')}
+                className={`px-2.5 py-0.5 rounded-lg text-[11px] font-bold transition ${
+                  playMode === 'jam'
+                    ? 'bg-purple-500 text-white'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Free Jam
+              </button>
+            </div>
+
+            {/* Beat Metronome Pulse */}
+            <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 px-2 py-0.5 rounded-xl">
+              <span className="text-[10px] text-slate-400 font-mono">120 BPM</span>
+              <span className={`w-2.5 h-2.5 rounded-full transition-all duration-75 ${
+                beatPulse ? 'bg-pink-400 shadow-md shadow-pink-500/50 scale-125' : 'bg-slate-700 scale-90'
+              }`} />
+              {lastTimingFeedback && (
+                <span className="text-[10px] font-mono font-bold text-amber-300 ml-1">
+                  {lastTimingFeedback}
+                </span>
+              )}
+            </div>
+
             {combo > 1 && (
               <div className="flex items-center gap-1.5 bg-purple-950/90 border border-purple-500/40 px-2.5 py-0.5 rounded-full text-purple-300 font-black animate-pulse">
                 <Flame className="w-3.5 h-3.5 text-orange-400" /> {combo} Combo ({comboMultiplier}x)
@@ -322,11 +384,11 @@ export const RooftopBeatModal: React.FC<RooftopBeatModalProps> = ({
 
             {/* Turntable Platter */}
             <div
-              onMouseDown={handleTurntableMouseDown}
-              onMouseMove={handleTurntableMouseMove}
-              onMouseUp={handleTurntableMouseUp}
-              onMouseLeave={handleTurntableMouseUp}
-              className="relative w-64 h-64 rounded-full bg-slate-950 border-4 border-slate-800 shadow-2xl flex items-center justify-center cursor-grab active:cursor-grabbing group overflow-hidden"
+              onPointerDown={handleTurntablePointerDown}
+              onPointerMove={handleTurntablePointerMove}
+              onPointerUp={handleTurntablePointerUp}
+              onPointerCancel={handleTurntablePointerUp}
+              className="relative w-64 h-64 rounded-full bg-slate-950 border-4 border-slate-800 shadow-2xl flex items-center justify-center cursor-grab active:cursor-grabbing group overflow-hidden touch-none"
             >
               {/* Vinyl Grooves */}
               <div

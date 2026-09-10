@@ -64,11 +64,50 @@ export const FishingGameModal: React.FC<FishingGameModalProps> = ({
   const tensionRef = useRef<number>(50);
   const progressRef = useRef<number>(20);
   const animationFrameRef = useRef<number | null>(null);
-  const lastTimeRef = useRef<number>(performance.now());
+  const lastTimeRef = useRef<number>(0);
   const reelInputRef = useRef<boolean>(false);
   const biteWaitTimerRef = useRef<number>(0);
 
   const speciesList = getRegionalFishSpecies(countryName, biome);
+
+  // Handle successful catch
+  const handleFishLanded = useCallback(() => {
+    const sp = hookedFishRef.current?.species || speciesList[0];
+    const weight = +(sp.minWeight + Math.random() * (sp.maxWeight - sp.minWeight)).toFixed(2);
+    const baseCoins = sp.rarity === 'Legendary' ? 140 : sp.rarity === 'Rare' ? 70 : 35;
+    const nextStreak = streak + 1;
+    setStreak(nextStreak);
+    const multiplier = nextStreak >= 4 ? 3 : nextStreak >= 3 ? 2 : nextStreak >= 2 ? 1.5 : 1;
+    const coins = Math.round(baseCoins * multiplier);
+
+    const isRecord = weight > (highScore || 0);
+    if (isRecord && onUpdateHighScore) {
+      onUpdateHighScore(weight);
+    }
+
+    setActiveFish({ species: sp, weight, coins, isRecord });
+    soundEffects.playTriumphChime();
+    gamepadManager.vibrate(300, 0.7, 0.5);
+
+    confetti({
+      particleCount: isRecord ? 130 : 85,
+      spread: isRecord ? 85 : 65,
+      origin: { y: 0.6 }
+    });
+
+    onEarnCoins(coins);
+    onAddBackpackItem({
+      id: `fish-${Date.now()}`,
+      name: `${sp.name} (${weight}kg)`,
+      category: 'fish',
+      icon: sp.icon,
+      city: cityName,
+      country: countryName,
+      description: `Caught in ${waterwayName || cityName}. ${sp.funFact}`,
+      acquiredAt: new Date().toISOString(),
+      priceCoins: coins
+    });
+  }, [highScore, onAddBackpackItem, onEarnCoins, onUpdateHighScore, speciesList, streak, cityName, countryName, waterwayName]);
 
   // Cast the fishing line
   const handleCast = useCallback(() => {
@@ -113,6 +152,7 @@ export const FishingGameModal: React.FC<FishingGameModalProps> = ({
     if (!isOpen) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      e.stopPropagation();
       if (e.code === 'Space' || e.key === 'w' || e.key === 'W' || e.key === 'Enter') {
         e.preventDefault();
         if (phaseRef.current === 'aim') {
@@ -126,6 +166,7 @@ export const FishingGameModal: React.FC<FishingGameModalProps> = ({
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
+      e.stopPropagation();
       if (e.code === 'Space' || e.key === 'w' || e.key === 'W' || e.key === 'Enter') {
         reelInputRef.current = false;
       }
@@ -148,6 +189,7 @@ export const FishingGameModal: React.FC<FishingGameModalProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    lastTimeRef.current = performance.now();
     phaseRef.current = 'aim';
     setPhase('aim');
     powerRef.current = 50;
@@ -315,46 +357,7 @@ export const FishingGameModal: React.FC<FishingGameModalProps> = ({
     return () => {
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
     };
-  }, [isOpen, speciesList, streak, highScore, onUpdateHighScore]);
-
-  // Handle successful catch
-  const handleFishLanded = () => {
-    const sp = hookedFishRef.current?.species || speciesList[0];
-    const weight = +(sp.minWeight + Math.random() * (sp.maxWeight - sp.minWeight)).toFixed(2);
-    const baseCoins = sp.rarity === 'Legendary' ? 140 : sp.rarity === 'Rare' ? 70 : 35;
-    const nextStreak = streak + 1;
-    setStreak(nextStreak);
-    const multiplier = nextStreak >= 4 ? 3 : nextStreak >= 3 ? 2 : nextStreak >= 2 ? 1.5 : 1;
-    const coins = Math.round(baseCoins * multiplier);
-
-    const isRecord = weight > (highScore || 0);
-    if (isRecord && onUpdateHighScore) {
-      onUpdateHighScore(weight);
-    }
-
-    setActiveFish({ species: sp, weight, coins, isRecord });
-    soundEffects.playTriumphChime();
-    gamepadManager.vibrate(300, 0.7, 0.5);
-
-    confetti({
-      particleCount: isRecord ? 130 : 85,
-      spread: isRecord ? 85 : 65,
-      origin: { y: 0.6 }
-    });
-
-    onEarnCoins(coins);
-    onAddBackpackItem({
-      id: `fish-${Date.now()}`,
-      name: `${sp.name} (${weight}kg)`,
-      category: 'fish',
-      icon: sp.icon,
-      city: cityName,
-      country: countryName,
-      description: `${sp.rarity} trophy catch from ${waterwayName || cityName}. ${sp.funFact}`,
-      acquiredAt: new Date().toISOString(),
-      priceCoins: coins
-    });
-  };
+  }, [isOpen, speciesList, streak, highScore, onUpdateHighScore, handleFishLanded]);
 
   const handleReset = () => {
     phaseRef.current = 'aim';

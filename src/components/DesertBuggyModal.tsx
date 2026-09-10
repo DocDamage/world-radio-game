@@ -67,9 +67,15 @@ export const DesertBuggyModal: React.FC<DesertBuggyModalProps> = ({
   const airTimerRef = useRef<number>(0);
   const crashTimerRef = useRef<number>(0);
   const buggyStateRef = useRef<BuggyState>('racing');
-  const lastTimeRef = useRef<number>(performance.now());
+  const lastTimeRef = useRef<number>(0);
   const animationFrameRef = useRef<number | null>(null);
   const shakeRef = useRef<number>(0);
+  const runSettledRef = useRef<boolean>(false);
+
+  const highScoreRef = useRef(highScore);
+  highScoreRef.current = highScore;
+  const onUpdateHighScoreRef = useRef(onUpdateHighScore);
+  onUpdateHighScoreRef.current = onUpdateHighScore;
 
   const triggerBoost = useCallback(() => {
     if (nitroRef.current < 15 || buggyStateRef.current !== 'racing') return;
@@ -88,6 +94,7 @@ export const DesertBuggyModal: React.FC<DesertBuggyModalProps> = ({
     if (!isOpen) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      e.stopPropagation();
       if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft') {
         steerInputRef.current = -1;
       } else if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') {
@@ -101,6 +108,7 @@ export const DesertBuggyModal: React.FC<DesertBuggyModalProps> = ({
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
+      e.stopPropagation();
       if ((e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft') && steerInputRef.current === -1) {
         steerInputRef.current = 0;
       } else if ((e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') && steerInputRef.current === 1) {
@@ -227,8 +235,8 @@ export const DesertBuggyModal: React.FC<DesertBuggyModalProps> = ({
       if (distanceRef.current >= FINISH_DISTANCE) {
         buggyStateRef.current = 'finished';
         setBuggyState('finished');
-        if (onUpdateHighScore && Math.round(distanceRef.current) > highScore) {
-          onUpdateHighScore(Math.round(distanceRef.current));
+        if (onUpdateHighScoreRef.current && Math.round(distanceRef.current) > highScoreRef.current) {
+          onUpdateHighScoreRef.current(Math.round(distanceRef.current));
         }
         soundEffects.playTriumphChime();
         gamepadManager.vibrate(300, 0.6, 0.4);
@@ -387,8 +395,9 @@ export const DesertBuggyModal: React.FC<DesertBuggyModalProps> = ({
   }, [isOpen]);
 
   const handleExit = () => {
-    if (coinsRef.current > 0) {
+    if (coinsRef.current > 0 && !runSettledRef.current) {
       onEarnCoins(coinsRef.current);
+      runSettledRef.current = true;
     }
     if (onUpdateHighScore && Math.round(distanceRef.current) > highScore) {
       onUpdateHighScore(Math.round(distanceRef.current));

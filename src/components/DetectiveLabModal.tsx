@@ -74,19 +74,19 @@ export const DetectiveLabModal: React.FC<DetectiveLabModalProps> = ({
   const [distanceKm, setDistanceKm] = useState<number | null>(null);
   const [rankTitle, setRankTitle] = useState('');
   const [coinsAwarded, setCoinsAwarded] = useState(0);
+  const [prevStationId, setPrevStationId] = useState(detectiveState.targetStation?.id);
 
   const targetStation = detectiveState.targetStation || activeStation;
   const forensic = getForensicProfile(targetStation?.country || '');
 
-  // Reset local state when a new mystery begins
-  useEffect(() => {
-    if (isOpen) {
-      setSelectedPin(null);
-      setRevealed(false);
-      setDistanceKm(null);
-      setCoinsAwarded(0);
-    }
-  }, [isOpen, detectiveState.targetStation]);
+  // Reset state during render when a new mystery case starts (no cascading effect render)
+  if (detectiveState.targetStation?.id !== prevStationId) {
+    setPrevStationId(detectiveState.targetStation?.id);
+    setSelectedPin(null);
+    setRevealed(false);
+    setDistanceKm(null);
+    setCoinsAwarded(0);
+  }
 
   // Audio Spectrogram Animation
   useEffect(() => {

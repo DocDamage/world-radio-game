@@ -170,13 +170,62 @@ export async function loadStationsSnapshot(): Promise<{ stations: RadioStation[]
   return { stations: CURATED_STATIONS, byPlace };
 }
 
+export function isValidCoordinate(lat: unknown, lng: unknown): boolean {
+  return (
+    typeof lat === 'number' &&
+    typeof lng === 'number' &&
+    !isNaN(lat) &&
+    !isNaN(lng) &&
+    lat >= -90 &&
+    lat <= 90 &&
+    lng >= -180 &&
+    lng <= 180
+  );
+}
+
+export function escapeHtml(str: string): string {
+  if (!str) return '';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 export async function fetchTopStations(limit = 200): Promise<RadioStation[]> {
   try {
     const { stations } = await loadStationsSnapshot();
     if (stations && stations.length > 0) {
-      // Return a spread of active stations with valid coordinates
-      const withGeo = stations.filter(s => s.geo_lat !== 0 && s.geo_long !== 0);
-      return withGeo.slice(0, limit);
+      // Validate coordinates (note: 0 lat and 0 lng is valid, e.g. equator / Prime Meridian)
+      const withGeo = stations.filter(s => isValidCoordinate(s.geo_lat, s.geo_long));
+
+      // Group by country or place for geographic diversity instead of returning only the first 250 in one country
+      const countryBuckets = new Map<string, RadioStation[]>();
+      for (const st of withGeo) {
+        const c = st.country || 'Unknown';
+        if (!countryBuckets.has(c)) countryBuckets.set(c, []);
+        countryBuckets.get(c)!.push(st);
+      }
+
+      const diverse: RadioStation[] = [];
+      const countries = Array.from(countryBuckets.keys());
+      let round = 0;
+      while (diverse.length < limit && round < 25) {
+        let addedThisRound = false;
+        for (const c of countries) {
+          const list = countryBuckets.get(c);
+          if (list && list[round]) {
+            diverse.push(list[round]);
+            addedThisRound = true;
+            if (diverse.length >= limit) break;
+          }
+        }
+        if (!addedThisRound) break;
+        round++;
+      }
+
+      return diverse.length > 0 ? diverse : withGeo.slice(0, limit);
     }
   } catch (err) {
     console.warn('Failed getting top stations:', err);

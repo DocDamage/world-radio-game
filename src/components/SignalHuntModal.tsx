@@ -47,8 +47,10 @@ export const SignalHuntModal: React.FC<SignalHuntModalProps> = ({
   const trueBearingDeg = (trueBearingRad * (180 / Math.PI) + 360) % 360;
 
   // Calculate directional gain using a 3-element Yagi beam pattern:
-  // Cardioid main lobe with front-to-back ratio
-  const angleDiffRad = ((azimuthDeg - trueBearingDeg) * Math.PI) / 180;
+  // Calculate shortest angular difference correctly wrapping around 0/360° boundary
+  let diffDeg = Math.abs(azimuthDeg - trueBearingDeg) % 360;
+  if (diffDeg > 180) diffDeg = 360 - diffDeg;
+  const angleDiffRad = (diffDeg * Math.PI) / 180;
   // Beam lobe formula: cos(angleDiff/2)^4 gives high forward peak and deep side/back nulls
   const directionalGain = Math.pow(Math.max(0, Math.cos(angleDiffRad / 2)), 3.8);
 
@@ -62,8 +64,9 @@ export const SignalHuntModal: React.FC<SignalHuntModalProps> = ({
   // Raw signal power into receiver
   const rawSignalPercent = Math.min(100, baseProximity * directionalGain * attenuationFactor * 120);
 
-  // Animate needle ballistics smoothly
+  // Animate needle ballistics smoothly (only when modal is actually open)
   useEffect(() => {
+    if (!isOpen) return;
     let frameId: number;
     const animateNeedle = () => {
       setNeedlePos(prev => {
@@ -75,7 +78,7 @@ export const SignalHuntModal: React.FC<SignalHuntModalProps> = ({
     };
     frameId = requestAnimationFrame(animateNeedle);
     return () => cancelAnimationFrame(frameId);
-  }, [rawSignalPercent]);
+  }, [isOpen, rawSignalPercent]);
 
   // Audio Heterodyne BFO Synthesizer
   useEffect(() => {

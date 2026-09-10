@@ -1,284 +1,396 @@
 import type { MarketItem, FishSpecies, LocationEnvironment, EnvironmentType, ActivityMode } from '../types';
 
-// Curated list of known major waterways and geography
-interface CityGeoRule {
-  keywords: string[];
+export interface ResolvedLocation {
+  placeName: string;
+  countryName: string;
+  lat: number;
+  lng: number;
+  environment: LocationEnvironment;
+  market: { marketName: string; items: MarketItem[] };
+  fishSpecies: FishSpecies[];
+}
+
+interface CuratedCityRule {
+  cityAliases: string[];
+  countryFilter?: string[];
   biome: EnvironmentType;
   waterwayName: string | null;
   badge: string;
   description: string;
+  activities?: ActivityMode[];
 }
 
-const CITY_GEO_RULES: CityGeoRule[] = [
+// Curated city-specific geography. City matching requires matching the specific city alias,
+// NEVER matching country substring alone, so other cities in the same country do not inherit unrelated canals/waterways.
+const CURATED_CITY_RULES: CuratedCityRule[] = [
   // River & Canal Cities
   {
-    keywords: ['paris', 'france'],
+    cityAliases: ['paris'],
+    countryFilter: ['france'],
     biome: 'river',
     waterwayName: 'Seine River & Canal Saint-Martin',
     badge: '🛶 Historic Seine Riverway',
-    description: 'Iconic stone bridges, bookstalls, and tree-lined quays along the Seine.'
+    description: 'Iconic stone bridges, bookstalls, and tree-lined quays along the Seine.',
+    activities: ['bike', 'boat', 'fishing', 'market', 'photo']
   },
   {
-    keywords: ['london', 'united kingdom', 'uk', 'thames'],
+    cityAliases: ['london'],
+    countryFilter: ['united kingdom', 'uk', 'great britain', 'england'],
     biome: 'river',
-    waterwayName: 'River Thames & Regent\'s Canal',
+    waterwayName: "River Thames & Regent's Canal",
     badge: '🚢 Historic Thames Waterway',
-    description: 'Tidal waterway flowing past Tower Bridge and historic docklands.'
+    description: 'Tidal waterway flowing past Tower Bridge and historic docklands.',
+    activities: ['bike', 'boat', 'fishing', 'market', 'photo']
   },
   {
-    keywords: ['amsterdam', 'netherlands', 'holland'],
+    cityAliases: ['amsterdam'],
+    countryFilter: ['netherlands', 'holland'],
     biome: 'river',
     waterwayName: 'Prinsengracht & Amstel River Canals',
     badge: '🛶 Historic Ring Canals',
-    description: 'Golden Age waterways flanked by gabled merchant townhouses.'
+    description: 'Golden Age waterways flanked by gabled merchant townhouses.',
+    activities: ['bike', 'boat', 'fishing', 'market', 'photo']
   },
   {
-    keywords: ['venice', 'venezia', 'italy'],
+    cityAliases: ['venice', 'venezia'],
+    countryFilter: ['italy', 'italia'],
     biome: 'river',
     waterwayName: 'Grand Canal & Venetian Lagoon',
     badge: '🛶 Grand Canal Waterway',
-    description: 'Gondolas and historic waterbuses gliding past Gothic palazzos.'
+    description: 'Gondolas and historic waterbuses gliding past Gothic palazzos.',
+    activities: ['boat', 'fishing', 'market', 'photo']
   },
   {
-    keywords: ['cairo', 'egypt'],
+    cityAliases: ['cairo'],
+    countryFilter: ['egypt'],
     biome: 'river',
     waterwayName: 'The River Nile',
     badge: '⛵ Historic Nile Riverway',
-    description: 'The legendary river flowing through the heart of Cairo under felucca sails.'
+    description: 'The legendary river flowing through the heart of Cairo under felucca sails.',
+    activities: ['bike', 'boat', 'fishing', 'market', 'photo']
   },
   {
-    keywords: ['bangkok', 'thailand'],
+    cityAliases: ['bangkok'],
+    countryFilter: ['thailand'],
     biome: 'river',
     waterwayName: 'Chao Phraya River & Khlongs',
     badge: '🚤 Chao Phraya Waterway',
-    description: 'Vibrant long-tail boats and floating canal routes beside golden temples.'
+    description: 'Vibrant long-tail boats and floating canal routes beside golden temples.',
+    activities: ['bike', 'boat', 'fishing', 'market', 'photo']
   },
   {
-    keywords: ['vienna', 'austria', 'danube'],
+    cityAliases: ['vienna', 'wien'],
+    countryFilter: ['austria'],
     biome: 'river',
     waterwayName: 'Danube River & Canal',
     badge: '🚢 Danube River Promenade',
-    description: 'Majestic central European river lined with classical architecture.'
+    description: 'Majestic central European river lined with classical architecture.',
+    activities: ['bike', 'boat', 'fishing', 'market', 'photo']
   },
   {
-    keywords: ['prague', 'czech', 'vltava'],
+    cityAliases: ['prague', 'praha'],
+    countryFilter: ['czech', 'czechia'],
     biome: 'river',
     waterwayName: 'Vltava River & Charles Bridge',
     badge: '🛶 Vltava Riverway',
-    description: 'Picturesque river coursing under medieval stone arch bridges.'
+    description: 'Picturesque river coursing under medieval stone arch bridges.',
+    activities: ['bike', 'boat', 'fishing', 'market', 'photo']
   },
   {
-    keywords: ['seoul', 'korea', 'han river'],
+    cityAliases: ['seoul'],
+    countryFilter: ['korea', 'south korea'],
     biome: 'river',
     waterwayName: 'Hangang (Han River)',
     badge: '🚢 Han River Promenade',
-    description: 'Broad waterway flanked by riverside parks and illuminated bridges.'
+    description: 'Broad waterway flanked by riverside parks and illuminated bridges.',
+    activities: ['bike', 'boat', 'fishing', 'market', 'photo']
   },
   {
-    keywords: ['rome', 'roma', 'tiber'],
+    cityAliases: ['rome', 'roma'],
+    countryFilter: ['italy', 'italia'],
     biome: 'river',
     waterwayName: 'Tiber River',
     badge: '🛶 Tiber Riverway',
-    description: 'Ancient river meandering through classical marble and stone bridges.'
+    description: 'Ancient river meandering through classical marble and stone bridges.',
+    activities: ['bike', 'boat', 'fishing', 'market', 'photo']
   },
 
   // Coastal / Maritime Harbor Cities
   {
-    keywords: ['tokyo', 'japan', 'yokohama'],
+    cityAliases: ['tokyo', 'yokohama'],
+    countryFilter: ['japan'],
     biome: 'coastal',
     waterwayName: 'Tokyo Bay & Sumida River',
     badge: '🌊 Tokyo Bay Maritime District',
-    description: 'Futuristic waterfront skyline, container ports, and ocean breezes.'
+    description: 'Futuristic waterfront skyline, container ports, and ocean breezes.',
+    activities: ['surf', 'bike', 'boat', 'fishing', 'market', 'photo']
   },
   {
-    keywords: ['sydney', 'australia'],
+    cityAliases: ['sydney'],
+    countryFilter: ['australia'],
     biome: 'coastal',
     waterwayName: 'Sydney Harbour & Pacific Coast',
     badge: '🌊 Sydney Harbour Port',
-    description: 'World-famous harbor with sparkling blue bays and ferry lanes.'
+    description: 'World-famous harbor with sparkling blue bays and ferry lanes.',
+    activities: ['surf', 'bike', 'boat', 'fishing', 'market', 'photo']
   },
   {
-    keywords: ['rio de janeiro', 'rio', 'brazil', 'brasil'],
+    cityAliases: ['rio de janeiro', 'rio'],
+    countryFilter: ['brazil', 'brasil'],
     biome: 'coastal',
     waterwayName: 'Guanabara Bay & Copacabana',
     badge: '🌊 Guanabara Coastal Waters',
-    description: 'Dramatic tropical coast flanked by Sugarloaf Mountain and ocean surf.'
+    description: 'Dramatic tropical coast flanked by Sugarloaf Mountain and ocean surf.',
+    activities: ['surf', 'bike', 'boat', 'fishing', 'market', 'photo']
   },
   {
-    keywords: ['new york', 'nyc', 'manhattan', 'brooklyn'],
+    cityAliases: ['new york', 'nyc', 'manhattan', 'brooklyn'],
+    countryFilter: ['united states', 'usa', 'us'],
     biome: 'coastal',
     waterwayName: 'Hudson River & New York Harbor',
     badge: '🌊 New York Maritime Harbor',
-    description: 'Bustling harbor ferries, tugboats, and skyline reflections.'
+    description: 'Bustling harbor ferries, tugboats, and skyline reflections.',
+    activities: ['bike', 'boat', 'fishing', 'market', 'photo']
   },
   {
-    keywords: ['san francisco', 'sf', 'california'],
+    cityAliases: ['san francisco'],
+    countryFilter: ['united states', 'usa', 'us'],
     biome: 'coastal',
     waterwayName: 'San Francisco Bay & Pacific Coast',
     badge: '🌊 Pacific Bay Channel',
-    description: 'Golden Gate fog, marine piers, and deep ocean swells.'
+    description: 'Golden Gate fog, marine piers, and deep ocean swells.',
+    activities: ['surf', 'bike', 'boat', 'fishing', 'market', 'photo']
   },
   {
-    keywords: ['lisbon', 'lisboa', 'portugal'],
+    cityAliases: ['lisbon', 'lisboa'],
+    countryFilter: ['portugal'],
     biome: 'coastal',
     waterwayName: 'Tagus River Estuary & Atlantic',
     badge: '🌊 Tagus Estuary & Ocean',
-    description: 'Sunlit maritime river mouth opening into the wide Atlantic Ocean.'
+    description: 'Sunlit maritime river mouth opening into the wide Atlantic Ocean.',
+    activities: ['surf', 'bike', 'boat', 'fishing', 'market', 'photo']
   },
   {
-    keywords: ['hong kong', 'hk'],
+    cityAliases: ['hong kong'],
     biome: 'coastal',
     waterwayName: 'Victoria Harbour',
     badge: '🌊 Victoria Harbour Passage',
-    description: 'Star Ferries and junk boats amidst towering harbor skyscrapers.'
+    description: 'Star Ferries and junk boats amidst towering harbor skyscrapers.',
+    activities: ['bike', 'boat', 'fishing', 'market', 'photo']
   },
   {
-    keywords: ['cape town', 'south africa'],
+    cityAliases: ['cape town'],
+    countryFilter: ['south africa'],
     biome: 'coastal',
     waterwayName: 'Table Bay & Atlantic Seaboard',
     badge: '🌊 Table Bay Maritime Coast',
-    description: 'Rugged ocean coastline meeting the iconic Table Mountain backdrop.'
+    description: 'Rugged ocean coastline meeting the iconic Table Mountain backdrop.',
+    activities: ['surf', 'bike', 'boat', 'fishing', 'market', 'photo']
   },
   {
-    keywords: ['singapore'],
+    cityAliases: ['singapore'],
     biome: 'coastal',
     waterwayName: 'Singapore Strait & Marina Bay',
     badge: '🌊 Marina Bay Maritime Port',
-    description: 'Global crossroads of shipping lanes and futuristic coastal reservoirs.'
+    description: 'Global crossroads of shipping lanes and futuristic coastal reservoirs.',
+    activities: ['bike', 'boat', 'fishing', 'market', 'photo']
   },
   {
-    keywords: ['barcelona', 'catalonia'],
+    cityAliases: ['barcelona'],
+    countryFilter: ['spain', 'catalonia'],
     biome: 'coastal',
     waterwayName: 'Mediterranean Sea Port',
     badge: '🌊 Mediterranean Port',
-    description: 'Golden beaches, marina boardwalks, and deep blue Mediterranean waters.'
+    description: 'Golden beaches, marina boardwalks, and deep blue Mediterranean waters.',
+    activities: ['surf', 'bike', 'boat', 'fishing', 'market', 'photo']
   },
   {
-    keywords: ['miami', 'florida'],
+    cityAliases: ['miami'],
+    countryFilter: ['united states', 'usa', 'us'],
     biome: 'coastal',
     waterwayName: 'Biscayne Bay & Atlantic Ocean',
     badge: '🌊 Biscayne Bay Waters',
-    description: 'Turquoise channels, speedboats, and neon tropical coastlines.'
+    description: 'Turquoise channels, speedboats, and neon tropical coastlines.',
+    activities: ['surf', 'bike', 'boat', 'fishing', 'market', 'photo']
   },
   {
-    keywords: ['honolulu', 'hawaii'],
+    cityAliases: ['honolulu'],
     biome: 'coastal',
     waterwayName: 'Pacific Ocean & Waikiki Reef',
     badge: '🌺 Pacific Reef Coast',
-    description: 'Crystal ocean surf, outrigger canoes, and volcanic island shores.'
+    description: 'Crystal ocean surf, outrigger canoes, and volcanic island shores.',
+    activities: ['surf', 'bike', 'boat', 'fishing', 'market', 'photo']
   },
 
   // Desert / Arid Cities
   {
-    keywords: ['dubai', 'abu dhabi', 'united arab emirates', 'uae'],
+    cityAliases: ['dubai', 'abu dhabi'],
+    countryFilter: ['united arab emirates', 'uae'],
     biome: 'desert',
     waterwayName: null,
     badge: '🏜️ Arabian Desert & Oasis',
-    description: 'Gleaming hyper-modern skyline rising out of golden Arabian dunes.'
+    description: 'Gleaming hyper-modern skyline rising out of golden Arabian dunes.',
+    activities: ['buggy', 'bike', 'market', 'photo']
   },
   {
-    keywords: ['riyadh', 'saudi arabia', 'jeddah'],
+    cityAliases: ['riyadh', 'jeddah'],
+    countryFilter: ['saudi arabia'],
     biome: 'desert',
     waterwayName: null,
     badge: '🏜️ Najd Desert Dunes',
-    description: 'Vast rolling sand seas and historic desert trading crossroads.'
+    description: 'Vast rolling sand seas and historic desert trading crossroads.',
+    activities: ['buggy', 'bike', 'market', 'photo']
   },
   {
-    keywords: ['marrakech', 'morocco'],
+    cityAliases: ['marrakech'],
+    countryFilter: ['morocco'],
     biome: 'desert',
     waterwayName: null,
     badge: '🏜️ Atlas Foothill Oasis',
-    description: 'Ochre clay ramparts, date palms, and camel caravan gates.'
+    description: 'Ochre clay ramparts, date palms, and camel caravan gates.',
+    activities: ['buggy', 'bike', 'market', 'photo']
   },
   {
-    keywords: ['phoenix', 'arizona', 'las vegas', 'nevada'],
+    cityAliases: ['phoenix', 'las vegas'],
+    countryFilter: ['united states', 'usa', 'us'],
     biome: 'desert',
     waterwayName: null,
     badge: '🏜️ Sonoran & Mojave Desert',
-    description: 'Sun-baked canyon roads, giant saguaro cacti, and desert highways.'
+    description: 'Sun-baked canyon roads, giant saguaro cacti, and desert highways.',
+    activities: ['buggy', 'bike', 'market', 'photo']
   },
   {
-    keywords: ['doha', 'qatar', 'kuwait', 'bahrain'],
+    cityAliases: ['doha', 'kuwait city', 'manama'],
     biome: 'desert',
     waterwayName: null,
     badge: '🏜️ Gulf Desert Sands',
-    description: 'Wind-sculpted sand dunes and sparkling coastal oasis promenades.'
+    description: 'Wind-sculpted sand dunes and sparkling coastal oasis promenades.',
+    activities: ['buggy', 'bike', 'market', 'photo']
   },
 
   // Alpine / Mountain Cities
   {
-    keywords: ['denver', 'colorado', 'rockies', 'salt lake city', 'utah'],
+    cityAliases: ['denver', 'salt lake city', 'aspen', 'boulder'],
+    countryFilter: ['united states', 'usa', 'us'],
     biome: 'alpine',
     waterwayName: 'Clear Creek Mountain Stream',
     badge: '🏔️ Rocky Mountain Foothills',
-    description: 'Mile-high alpine air, pine-scented canyons, and snowy peaks.'
+    description: 'Mile-high alpine air, pine-scented canyons, and snowy peaks.',
+    activities: ['ski', 'bike', 'fishing', 'market', 'photo']
   },
   {
-    keywords: ['innsbruck', 'alps', 'salzburg', 'zurich', 'bern', 'geneva', 'switzerland'],
+    cityAliases: ['innsbruck', 'salzburg'],
+    countryFilter: ['austria'],
+    biome: 'alpine',
+    waterwayName: 'Inn River Glacier Stream',
+    badge: '🏔️ Austrian Alps',
+    description: 'Crisp mountain valleys, chalets, and roaring glacial torrents.',
+    activities: ['ski', 'bike', 'fishing', 'market', 'photo']
+  },
+  {
+    cityAliases: ['zurich', 'bern', 'geneva', 'zermatt'],
+    countryFilter: ['switzerland'],
     biome: 'alpine',
     waterwayName: 'Alpine Glacier River',
-    badge: '🏔️ Swiss & Austrian Alps',
-    description: 'Crisp mountain valleys, chalets, and roaring glacial torrents.'
+    badge: '🏔️ Swiss Alps Foothills',
+    description: 'Alpine chalets, pristine mountain streams, and snowy peaks.',
+    activities: ['ski', 'bike', 'fishing', 'market', 'photo']
   },
   {
-    keywords: ['kathmandu', 'nepal', 'himalaya'],
+    cityAliases: ['kathmandu'],
+    countryFilter: ['nepal'],
     biome: 'alpine',
     waterwayName: 'Bagmati Valley Stream',
     badge: '🏔️ Himalayan Valley',
-    description: 'High Himalayan plateau crowned by ancient prayer-flag mountain passes.'
+    description: 'High Himalayan plateau crowned by ancient prayer-flag mountain passes.',
+    activities: ['ski', 'bike', 'fishing', 'market', 'photo']
   },
   {
-    keywords: ['santiago', 'chile', 'andes', 'la paz', 'bolivia', 'quito', 'bogota'],
+    cityAliases: ['santiago', 'la paz', 'quito', 'bogota'],
     biome: 'alpine',
     waterwayName: 'Andean Mountain Stream',
     badge: '🏔️ High Andean Ridge',
-    description: 'Towering Andean summits guarding high-altitude historic avenues.'
+    description: 'Towering Andean summits guarding high-altitude historic avenues.',
+    activities: ['ski', 'bike', 'fishing', 'market', 'photo']
   },
 
-  // Inland Metropolises (No major waterways)
+  // Inland Metropolises
   {
-    keywords: ['madrid', 'spain'],
+    cityAliases: ['madrid'],
+    countryFilter: ['spain'],
     biome: 'urban',
     waterwayName: null,
     badge: '🏙️ Iberian Grand Boulevard',
-    description: 'Grand stone plazas, rooftop terraces, and lively boulevard cafes.'
+    description: 'Grand stone plazas, rooftop terraces, and lively boulevard cafes.',
+    activities: ['dj', 'bike', 'market', 'photo']
   },
   {
-    keywords: ['berlin', 'germany'],
+    cityAliases: ['berlin'],
+    countryFilter: ['germany'],
     biome: 'urban',
-    waterwayName: null,
+    waterwayName: 'Spree River Walk',
     badge: '🏙️ Berlin Urban Metropolis',
-    description: 'Vibrant underground club culture, street murals, and wide avenues.'
+    description: 'Vibrant underground club culture, street murals, and wide avenues.',
+    activities: ['dj', 'bike', 'market', 'photo']
   },
   {
-    keywords: ['mexico city', 'cdmx', 'mexico'],
+    cityAliases: ['mexico city', 'cdmx'],
+    countryFilter: ['mexico'],
     biome: 'urban',
     waterwayName: null,
     badge: '🏙️ Valle de México Megacity',
-    description: 'High-altitude megalopolis bursting with street music, food stalls, and colonial plazas.'
+    description: 'High-altitude megalopolis bursting with street music, food stalls, and colonial plazas.',
+    activities: ['dj', 'bike', 'market', 'photo']
   },
   {
-    keywords: ['chicago', 'illinois', 'dallas', 'texas', 'atlanta', 'georgia'],
+    cityAliases: ['chicago'],
+    countryFilter: ['united states', 'usa', 'us'],
     biome: 'urban',
-    waterwayName: null,
-    badge: '🏙️ American Heartland Metropolis',
-    description: 'Sky-scraping architectural canyons, bustling avenues, and transit lines.'
+    waterwayName: 'Chicago River Canal & Lakefront',
+    badge: '🏙️ Windy City Urban Canyon',
+    description: 'Sky-scraping architectural canyons, bustling avenues, and transit lines.',
+    activities: ['dj', 'bike', 'boat', 'market', 'photo']
   },
   {
-    keywords: ['sao paulo', 'são paulo'],
+    cityAliases: ['sao paulo', 'são paulo'],
+    countryFilter: ['brazil', 'brasil'],
     biome: 'urban',
     waterwayName: null,
     badge: '🏙️ Paulista Concrete Metropolis',
-    description: 'Endless sea of towers, neon street art, and legendary nightlife.'
+    description: 'Endless sea of towers, neon street art, and legendary nightlife.',
+    activities: ['dj', 'bike', 'market', 'photo']
   },
   {
-    keywords: ['johannesburg', 'joburg'],
+    cityAliases: ['johannesburg', 'joburg'],
+    countryFilter: ['south africa'],
     biome: 'urban',
     waterwayName: null,
     badge: '🏙️ Highveld Metropolis',
-    description: 'Gold Reef highlands, jacaranda avenues, and bustling rooftop vibes.'
+    description: 'Gold Reef highlands, jacaranda avenues, and bustling rooftop vibes.',
+    activities: ['dj', 'bike', 'market', 'photo']
   }
 ];
+
+function cityMatchesRule(rule: CuratedCityRule, placeName: string, countryName: string): boolean {
+  const p = (placeName || '').trim().toLowerCase();
+  const c = (countryName || '').trim().toLowerCase();
+
+  // The place name must match one of the city aliases (exact match or alias as discrete word)
+  const matchesCity = rule.cityAliases.some(alias => {
+    if (p === alias) return true;
+    const regex = new RegExp(`(^|\\b)${alias}(\\b|$)`, 'i');
+    return regex.test(p);
+  });
+
+  if (!matchesCity) return false;
+
+  // If the rule specifies country filters, country must also match
+  if (rule.countryFilter && rule.countryFilter.length > 0) {
+    return rule.countryFilter.some(cf => c.includes(cf) || cf.includes(c));
+  }
+
+  return true;
+}
 
 export function resolveLocationEnvironment(
   placeName: string,
@@ -286,104 +398,112 @@ export function resolveLocationEnvironment(
   lat: number = 0,
   lng: number = 0
 ): LocationEnvironment {
-  const p = (placeName || '').toLowerCase();
-  const c = (countryName || '').toLowerCase();
-  const full = `${p} ${c}`;
+  const p = (placeName || '').trim();
+  const c = (countryName || '').trim();
 
-  // 1. Check curated exact matches
-  for (const rule of CITY_GEO_RULES) {
-    if (rule.keywords.some(k => full.includes(k))) {
-      return buildEnvironment(rule.biome, rule.waterwayName, rule.badge, rule.description, placeName, countryName);
+  // 1. Check curated exact city rules first
+  for (const rule of CURATED_CITY_RULES) {
+    if (cityMatchesRule(rule, p, c)) {
+      return {
+        biome: rule.biome,
+        badge: rule.badge,
+        waterwayName: rule.waterwayName,
+        description: rule.description,
+        availableActivities: rule.activities || getDefaultActivities(rule.biome)
+      };
     }
   }
 
-  // 2. Heuristic checks based on latitude, longitude, and country words
-  // Island nations are coastal
+  // 2. Geographic and elevation heuristics
+  // High mountain areas (Rockies, Andes, Himalayas, European Alps)
+  const isHighAltitude =
+    (lat > 25 && lat < 38 && lng > 68 && lng < 95) || // Himalayas
+    (lat > 35 && lat < 45 && lng > -112 && lng < -104) || // Rockies
+    (lat > 45 && lat < 48 && lng > 6 && lng < 14) || // Alps
+    (lat > -45 && lat < 10 && lng > -78 && lng < -65); // Andes
+
+  if (isHighAltitude) {
+    return {
+      biome: 'alpine',
+      badge: '🏔️ Mountain Highlands',
+      waterwayName: `${p || 'Alpine'} Mountain Stream`,
+      description: `High elevation mountain valley near ${p || 'the summit'}, ${c}.`,
+      availableActivities: ['ski', 'bike', 'fishing', 'market', 'photo']
+    };
+  }
+
+  // Desert belt
+  const isDesertBelt =
+    (lat > 15 && lat < 32 && lng > -15 && lng < 58) || // Sahara & Arabia
+    (lat > -30 && lat < -20 && lng > 115 && lng < 140); // Australian Outback
+
+  if (isDesertBelt) {
+    return {
+      biome: 'desert',
+      badge: '🏜️ Arid Sands & Oasis',
+      waterwayName: null,
+      description: `Sun-drenched desert terrain and oasis settlements in ${c}.`,
+      availableActivities: ['buggy', 'bike', 'market', 'photo']
+    };
+  }
+
+  // Coastal / Island detection
   const islandCountries = ['japan', 'indonesia', 'philippines', 'new zealand', 'iceland', 'madagascar', 'cuba', 'jamaica', 'ireland', 'fiji', 'hawaii', 'caribbean', 'bahamas'];
-  if (islandCountries.some(i => c.includes(i))) {
-    return buildEnvironment(
-      'coastal',
-      `${placeName || 'Coastal'} Seaboard Waters`,
-      '🌊 Island & Maritime Coast',
-      `Island coastline and open ocean waters surrounding ${placeName || countryName}.`,
-      placeName,
-      countryName
-    );
-  }
-
-  // High mountain areas (Andes, Rockies, Himalayas)
-  if ((lat > 25 && lat < 38 && lng > 68 && lng < 95) || // Himalayas
-      (lat > 35 && lat < 45 && lng > -112 && lng < -104) || // Rockies
-      (lat > -45 && lat < 10 && lng > -78 && lng < -65)) { // Andes
-    return buildEnvironment(
-      'alpine',
-      `${placeName || 'Alpine'} Mountain Stream`,
-      '🏔️ Mountain Highlands',
-      `High elevation mountain valley near ${placeName}, ${countryName}.`,
-      placeName,
-      countryName
-    );
-  }
-
-  // Desert belt (Sahara, Arabian Peninsula, Central Australia)
-  if ((lat > 15 && lat < 33 && lng > -15 && lng < 58) || // Sahara & Arabia
-      (lat > -30 && lat < -20 && lng > 115 && lng < 140)) { // Outback
-    return buildEnvironment(
-      'desert',
-      null,
-      '🏜️ Arid Sands & Oasis',
-      `Sun-drenched desert terrain and oasis settlements in ${countryName}.`,
-      placeName,
-      countryName
-    );
+  const cLower = c.toLowerCase();
+  if (islandCountries.some(i => cLower.includes(i))) {
+    return {
+      biome: 'coastal',
+      badge: '🌊 Island Maritime Coast',
+      waterwayName: `${p || 'Coastal'} Seaboard Waters`,
+      description: `Island coastline and ocean waters surrounding ${p || c}.`,
+      availableActivities: ['surf', 'bike', 'boat', 'fishing', 'market', 'photo']
+    };
   }
 
   // Default fallback for inland cities
-  return buildEnvironment(
-    'urban',
-    null,
-    '🏙️ City Street Grid',
-    `Urban thoroughfares and cultural avenues of ${placeName || 'this city'}, ${countryName}.`,
-    placeName,
-    countryName
-  );
+  return {
+    biome: 'urban',
+    badge: '🏙️ City Street Grid',
+    waterwayName: null,
+    description: `Urban thoroughfares and cultural avenues of ${p || 'this city'}, ${c}.`,
+    availableActivities: ['dj', 'bike', 'market', 'photo']
+  };
 }
 
-function buildEnvironment(
-  biome: EnvironmentType,
-  waterwayName: string | null,
-  badge: string,
-  description: string,
-  placeName: string,
-  countryName: string
-): LocationEnvironment {
-  let availableActivities: ActivityMode[] = [];
-
+function getDefaultActivities(biome: EnvironmentType): ActivityMode[] {
   switch (biome) {
     case 'coastal':
-      availableActivities = ['surf', 'bike', 'boat', 'fishing', 'market', 'photo'];
-      break;
+      return ['surf', 'bike', 'boat', 'fishing', 'market', 'photo'];
     case 'river':
-      availableActivities = ['bike', 'boat', 'fishing', 'market', 'photo'];
-      break;
+      return ['bike', 'boat', 'fishing', 'market', 'photo'];
     case 'desert':
-      availableActivities = ['buggy', 'bike', 'market', 'photo'];
-      break;
+      return ['buggy', 'bike', 'market', 'photo'];
     case 'alpine':
-      availableActivities = ['ski', 'bike', 'fishing', 'market', 'photo'];
-      break;
+      return ['ski', 'bike', 'fishing', 'market', 'photo'];
     case 'urban':
     default:
-      availableActivities = ['bike', 'dj', 'market', 'photo'];
-      break;
+      return ['dj', 'bike', 'market', 'photo'];
   }
+}
+
+export function resolveCompleteLocation(
+  placeName: string,
+  countryName: string,
+  lat: number = 0,
+  lng: number = 0
+): ResolvedLocation {
+  const env = resolveLocationEnvironment(placeName, countryName, lat, lng);
+  const market = getCityMarketItems(placeName, countryName, env.biome);
+  const fish = getRegionalFishSpecies(countryName, env.biome);
 
   return {
-    biome,
-    badge,
-    waterwayName: waterwayName ? waterwayName : null,
-    description: description || `Exploring ${placeName}, ${countryName}`,
-    availableActivities
+    placeName,
+    countryName,
+    lat,
+    lng,
+    environment: env,
+    market,
+    fishSpecies: fish
   };
 }
 

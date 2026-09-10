@@ -191,6 +191,82 @@ export const Dlss5Modal: React.FC<Dlss5ModalProps> = ({
           )}
         </div>
 
+        {/* Rendering Quality & Accessibility Controls */}
+        <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-4 flex flex-col gap-3">
+          <div className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+            <Sliders className="w-4 h-4 text-emerald-400" /> Graphics & Performance Tweaks
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 text-xs">
+            <div className="flex flex-col gap-1">
+              <span className="text-slate-400">Particle Density</span>
+              <select
+                value={dlss5.getConfig().particleDensity}
+                onChange={e => {
+                  dlss5.getConfig().particleDensity = e.target.value as any;
+                  onConfigChange();
+                }}
+                className="bg-slate-800 border border-slate-700 text-slate-200 rounded-xl px-2 py-1"
+              >
+                <option value="low">Low (Battery Saver)</option>
+                <option value="medium">Medium (Standard)</option>
+                <option value="high">High (Maximum Details)</option>
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <span className="text-slate-400">Globe Detail</span>
+              <select
+                value={dlss5.getConfig().globeLOD}
+                onChange={e => {
+                  dlss5.getConfig().globeLOD = e.target.value as any;
+                  onConfigChange();
+                }}
+                className="bg-slate-800 border border-slate-700 text-slate-200 rounded-xl px-2 py-1"
+              >
+                <option value="standard">Standard LOD</option>
+                <option value="high">High Resolution</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between pt-2 border-t border-slate-800">
+            <div>
+              <span className="text-xs font-bold text-slate-200">Screen Shake & Camera Dynamics</span>
+              <span className="block text-[10px] text-slate-400">Visual impact feedback during game crashes or bass hits</span>
+            </div>
+            <button
+              onClick={() => {
+                dlss5.getConfig().screenShake = !dlss5.getConfig().screenShake;
+                onConfigChange();
+              }}
+              className={`w-10 h-5 rounded-full transition p-0.5 flex items-center ${
+                dlss5.getConfig().screenShake ? 'bg-emerald-500 justify-end' : 'bg-slate-800 justify-start'
+              }`}
+            >
+              <div className="w-4 h-4 rounded-full bg-white shadow-md" />
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between pt-1">
+            <div>
+              <span className="text-xs font-bold text-slate-200">Reduced Motion</span>
+              <span className="block text-[10px] text-slate-400">Minimize rapid scene oscillations and flashes</span>
+            </div>
+            <button
+              onClick={() => {
+                dlss5.getConfig().reducedMotion = !dlss5.getConfig().reducedMotion;
+                onConfigChange();
+              }}
+              className={`w-10 h-5 rounded-full transition p-0.5 flex items-center ${
+                dlss5.getConfig().reducedMotion ? 'bg-emerald-500 justify-end' : 'bg-slate-800 justify-start'
+              }`}
+            >
+              <div className="w-4 h-4 rounded-full bg-white shadow-md" />
+            </button>
+          </div>
+        </div>
+
         {/* Sliders: Sharpness & RenoDX HDR Uplift */}
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1.5">

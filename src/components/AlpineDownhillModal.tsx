@@ -48,6 +48,7 @@ export const AlpineDownhillModal: React.FC<AlpineDownhillModalProps> = ({
   const [coinsEarned, setCoinsEarned] = useState<number>(0);
   const [comboCount, setComboCount] = useState<number>(0);
   const [skiState, setSkiState] = useState<SkiState>('skiing');
+  const [finalTime, setFinalTime] = useState<string>('0.0');
   const FINISH_DISTANCE = 2500;
 
   // Mutable 60fps loop refs
@@ -64,15 +65,22 @@ export const AlpineDownhillModal: React.FC<AlpineDownhillModalProps> = ({
   const wipeoutTimerRef = useRef<number>(0);
   const shakeRef = useRef<number>(0);
   const skiStateRef = useRef<SkiState>('skiing');
-  const lastTimeRef = useRef<number>(performance.now());
+  const lastTimeRef = useRef<number>(0);
   const animationFrameRef = useRef<number | null>(null);
   const startTimeRef = useRef<number>(0);
+  const runSettledRef = useRef<boolean>(false);
+
+  const highScoreRef = useRef(highScore);
+  highScoreRef.current = highScore;
+  const onUpdateHighScoreRef = useRef(onUpdateHighScore);
+  onUpdateHighScoreRef.current = onUpdateHighScore;
 
   // Keyboard controls
   useEffect(() => {
     if (!isOpen) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      e.stopPropagation();
       if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft') {
         steerInputRef.current = -1;
       } else if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') {
@@ -86,6 +94,7 @@ export const AlpineDownhillModal: React.FC<AlpineDownhillModalProps> = ({
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
+      e.stopPropagation();
       if ((e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft') && steerInputRef.current === -1) {
         steerInputRef.current = 0;
       } else if ((e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') && steerInputRef.current === 1) {
@@ -194,8 +203,10 @@ export const AlpineDownhillModal: React.FC<AlpineDownhillModalProps> = ({
       if (distanceRef.current >= FINISH_DISTANCE) {
         skiStateRef.current = 'finished';
         setSkiState('finished');
-        if (onUpdateHighScore && gatesRef.current > highScore) {
-          onUpdateHighScore(gatesRef.current);
+        const elapsed = ((currentTime - startTimeRef.current) / 1000).toFixed(1);
+        setFinalTime(elapsed);
+        if (onUpdateHighScoreRef.current && gatesRef.current > highScoreRef.current) {
+          onUpdateHighScoreRef.current(gatesRef.current);
         }
         soundEffects.playTriumphChime();
         gamepadManager.vibrate(300, 0.6, 0.4);
@@ -344,8 +355,9 @@ export const AlpineDownhillModal: React.FC<AlpineDownhillModalProps> = ({
   }, [isOpen]);
 
   const handleExit = () => {
-    if (coinsRef.current > 0) {
+    if (coinsRef.current > 0 && !runSettledRef.current) {
       onEarnCoins(coinsRef.current);
+      runSettledRef.current = true;
     }
     onClose();
   };
@@ -435,7 +447,7 @@ export const AlpineDownhillModal: React.FC<AlpineDownhillModalProps> = ({
               <div className="text-5xl font-black text-sky-400">🏁 FINISH!</div>
               <div className="text-sm text-sky-200">You completed the {FINISH_DISTANCE}m slalom course!</div>
               <div className="text-lg font-bold text-amber-400">Gates: {gatesCleared} • Coins: +{coinsEarned}</div>
-              <div className="text-sm text-slate-300">Time: {((performance.now() - startTimeRef.current) / 1000).toFixed(1)}s</div>
+              <div className="text-sm text-slate-300">Time: {finalTime}s</div>
               <button onClick={handleExit} className="px-6 py-2 bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold rounded-xl">
                 <Trophy className="w-4 h-4 inline mr-1" /> Bank Coins & Exit
               </button>

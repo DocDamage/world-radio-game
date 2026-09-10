@@ -24,6 +24,10 @@ export interface DlssConfig {
   neuralReconstruction: boolean;
   hdrUplift: boolean;
   simulatedLatencyMs: number;
+  particleDensity: 'low' | 'medium' | 'high';
+  screenShake: boolean;
+  reducedMotion: boolean;
+  globeLOD: 'standard' | 'high';
 }
 
 export class Dlss5Engine {
@@ -33,11 +37,15 @@ export class Dlss5Engine {
     mode: 'quality',
     renderScale: 0.67,
     sharpness: 0.75,
-    frameGen: true,
-    frameGenMultiplier: 2,
+    frameGen: false,
+    frameGenMultiplier: 1,
     neuralReconstruction: true,
     hdrUplift: true,
-    simulatedLatencyMs: 0.8
+    simulatedLatencyMs: 0.8,
+    particleDensity: 'medium',
+    screenShake: true,
+    reducedMotion: false,
+    globeLOD: 'standard'
   };
 
   public detectGpu(): GpuArchitectureInfo {

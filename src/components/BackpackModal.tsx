@@ -160,30 +160,47 @@ export const BackpackModal: React.FC<BackpackModalProps> = ({
             </div>
 
             {/* Content Showcase */}
-            <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center p-4">
-              <div className="relative">
-                <span className="text-6xl p-4 bg-slate-900 rounded-3xl border border-slate-700 shadow-2xl block animate-bounce">
-                  {inspectedItem.icon}
-                </span>
-                {inspectedItem.category === 'photo' && (
-                  <Camera className="w-5 h-5 text-lime-400 absolute -bottom-1 -right-1 bg-slate-950 rounded-full p-0.5" />
-                )}
-                {inspectedItem.category === 'vinyl' && (
-                  <Disc className="w-5 h-5 text-purple-400 absolute -bottom-1 -right-1 bg-slate-950 rounded-full p-0.5 animate-spin" />
-                )}
-                {inspectedItem.category === 'fish' && (
-                  <Fish className="w-5 h-5 text-sky-400 absolute -bottom-1 -right-1 bg-slate-950 rounded-full p-0.5" />
-                )}
-              </div>
+            <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center p-2 overflow-y-auto">
+              {inspectedItem.photoUrl ? (
+                <div className="flex flex-col items-center gap-2">
+                  <img
+                    src={inspectedItem.photoUrl}
+                    alt={inspectedItem.name}
+                    className="max-h-44 w-auto rounded-2xl border border-lime-400/50 shadow-2xl object-contain"
+                  />
+                  <a
+                    href={inspectedItem.photoUrl}
+                    download={`${inspectedItem.name.toLowerCase().replace(/\s+/g, '_')}.png`}
+                    className="text-[11px] font-mono text-lime-400 hover:underline flex items-center gap-1"
+                  >
+                    💾 Save Full Postcard Image
+                  </a>
+                </div>
+              ) : (
+                <div className="relative">
+                  <span className="text-6xl p-4 bg-slate-900 rounded-3xl border border-slate-700 shadow-2xl block animate-bounce">
+                    {inspectedItem.icon}
+                  </span>
+                  {inspectedItem.category === 'photo' && (
+                    <Camera className="w-5 h-5 text-lime-400 absolute -bottom-1 -right-1 bg-slate-950 rounded-full p-0.5" />
+                  )}
+                  {inspectedItem.category === 'vinyl' && (
+                    <Disc className="w-5 h-5 text-purple-400 absolute -bottom-1 -right-1 bg-slate-950 rounded-full p-0.5 animate-spin" />
+                  )}
+                  {inspectedItem.category === 'fish' && (
+                    <Fish className="w-5 h-5 text-sky-400 absolute -bottom-1 -right-1 bg-slate-950 rounded-full p-0.5" />
+                  )}
+                </div>
+              )}
 
               <div>
                 <h3 className="text-lg font-black text-slate-100">{inspectedItem.name}</h3>
-                <div className="flex items-center justify-center gap-2 text-xs font-mono text-lime-400 mt-1">
+                <div className="flex items-center justify-center gap-2 text-xs font-mono text-lime-400 mt-0.5">
                   <MapPin className="w-3.5 h-3.5" /> {inspectedItem.city}, {inspectedItem.country}
                 </div>
               </div>
 
-              <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 max-w-md text-xs text-slate-300 leading-relaxed">
+              <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-3 max-w-md text-xs text-slate-300 leading-relaxed">
                 {inspectedItem.description}
               </div>
 

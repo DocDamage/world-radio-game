@@ -68,7 +68,9 @@ export const BoatingGameModal: React.FC<BoatingGameModalProps> = ({
   const coinsRef = useRef<number>(0);
   const hullRef = useRef<number>(100);
   const isSunkRef = useRef<boolean>(false);
-  const lastTimeRef = useRef<number>(performance.now());
+  const isDockedRef = useRef<boolean>(false);
+  const runSettledRef = useRef<boolean>(false);
+  const lastTimeRef = useRef<number>(0);
   const animationFrameRef = useRef<number | null>(null);
 
   // Fog horn blast
@@ -85,6 +87,7 @@ export const BoatingGameModal: React.FC<BoatingGameModalProps> = ({
     if (!isOpen) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      e.stopPropagation();
       if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft') {
         rudderInputRef.current = -1;
       } else if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') {
@@ -108,6 +111,7 @@ export const BoatingGameModal: React.FC<BoatingGameModalProps> = ({
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
+      e.stopPropagation();
       if ((e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft') && rudderInputRef.current === -1) {
         rudderInputRef.current = 0;
       } else if ((e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') && rudderInputRef.current === 1) {
@@ -133,6 +137,7 @@ export const BoatingGameModal: React.FC<BoatingGameModalProps> = ({
     if (!ctx) return;
 
     boatPosRef.current = { x: canvas.width / 2, y: canvas.height - 90 };
+    lastTimeRef.current = performance.now();
     boatHeadingRef.current = 0;
     boatSpeedRef.current = 20;
     throttleRef.current = 1;
@@ -140,6 +145,8 @@ export const BoatingGameModal: React.FC<BoatingGameModalProps> = ({
     coinsRef.current = 0;
     hullRef.current = 100;
     isSunkRef.current = false;
+    isDockedRef.current = false;
+    runSettledRef.current = false;
     setHullIntegrity(100);
     setIsSunk(false);
     setDockedSuccessfully(false);
@@ -234,8 +241,9 @@ export const BoatingGameModal: React.FC<BoatingGameModalProps> = ({
             boatSpeedRef.current = 0;
           }
         } else if (h.type === 'dock' && dist < 45) {
-          // Check docking speed — precision bonus
-          if (Math.abs(boatSpeedRef.current) < 12 && !dockedSuccessfully) {
+          // Check docking speed — precision bonus awarded once per dock
+          if (Math.abs(boatSpeedRef.current) < 12 && !isDockedRef.current) {
+            isDockedRef.current = true;
             const speedBonus = Math.abs(boatSpeedRef.current) < 5 ? 80 : 50;
             coinsRef.current += speedBonus;
             setDockedSuccessfully(true);
@@ -325,11 +333,12 @@ export const BoatingGameModal: React.FC<BoatingGameModalProps> = ({
   }, [isOpen]);
 
   const handleFinish = () => {
-    let finalReward = coinsGathered;
-    if (dockedSuccessfully) finalReward += 50;
-    if (finalReward > 0) onEarnCoins(finalReward);
-    if (onUpdateHighScore && finalReward > highScore) {
-      onUpdateHighScore(finalReward);
+    if (coinsRef.current > 0 && !runSettledRef.current) {
+      onEarnCoins(coinsRef.current);
+      runSettledRef.current = true;
+    }
+    if (onUpdateHighScore && coinsRef.current > highScore) {
+      onUpdateHighScore(coinsRef.current);
     }
     onClose();
   };

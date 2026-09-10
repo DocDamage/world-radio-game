@@ -24,12 +24,16 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Focus on open
+  // Focus and initialize on open
   useEffect(() => {
     if (isOpen) {
+      const timer = setTimeout(() => {
+        inputRef.current?.focus();
+      }, 50);
+      return () => clearTimeout(timer);
+    } else {
       setQuery('');
       setSelectedIndex(0);
-      setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [isOpen]);
 
@@ -38,14 +42,19 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     if (!isOpen) return;
     const q = query.trim().toLowerCase();
 
+    let active = true;
+
     if (!q) {
       // Show top suggestions & favorites
       fetchPlaces().then(places => {
+        if (!active) return;
         const top = places.filter(p => p.size > 20).slice(0, 6);
         setMatchedPlaces(top);
+        setMatchedStations(Object.values(favorites).slice(0, 4));
       });
-      setMatchedStations(Object.values(favorites).slice(0, 4));
-      return;
+      return () => {
+        active = false;
+      };
     }
 
     // Match places from cache with OpenRadio priority scoring

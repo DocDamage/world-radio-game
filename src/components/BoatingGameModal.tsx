@@ -2,7 +2,9 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Ship, Waves, Compass, Gauge, X, Volume2, Anchor, Sparkles } from 'lucide-react';
 import { soundEffects } from '../services/audioEffects';
 import { gamepadManager } from '../services/gamepadManager';
+import { MissionHUD } from './MissionHUD';
 import type { EnvironmentType } from '../types';
+import type { MissionScenario, MissionResultPayload } from '../missions/types';
 
 interface BoatingGameModalProps {
   isOpen: boolean;
@@ -14,6 +16,10 @@ interface BoatingGameModalProps {
   onEarnCoins: (amount: number) => void;
   highScore?: number;
   onUpdateHighScore?: (score: number) => void;
+  /** Active World Expedition mission scenario (null = free cruise) */
+  missionScenario?: MissionScenario | null;
+  /** Emitted exactly once when an active mission run settles */
+  onMissionResult?: (payload: MissionResultPayload) => void;
 }
 
 interface WakeParticle {
@@ -42,7 +48,9 @@ export const BoatingGameModal: React.FC<BoatingGameModalProps> = ({
   waterwayName,
   onEarnCoins,
   highScore = 0,
-  onUpdateHighScore
+  onUpdateHighScore,
+  missionScenario,
+  onMissionResult
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -56,6 +64,8 @@ export const BoatingGameModal: React.FC<BoatingGameModalProps> = ({
   const [hornActive, setHornActive] = useState<boolean>(false);
   const [hullIntegrity, setHullIntegrity] = useState<number>(100);
   const [isSunk, setIsSunk] = useState<boolean>(false);
+  const [cratesCollected, setCratesCollected] = useState<number>(0);
+  const [totalCrates, setTotalCrates] = useState<number>(2);
 
   // Mutable refs for 60fps simulation
   const boatPosRef = useRef<{ x: number; y: number }>({ x: 300, y: 450 });
@@ -72,6 +82,41 @@ export const BoatingGameModal: React.FC<BoatingGameModalProps> = ({
   const runSettledRef = useRef<boolean>(false);
   const lastTimeRef = useRef<number>(0);
   const animationFrameRef = useRef<number | null>(null);
+
+  // Mission context (World Expedition Command), read fresh by the 60fps loop
+  const scenarioRef = useRef<MissionScenario | null | undefined>(undefined);
+  scenarioRef.current = missionScenario;
+  const missionSettledRef = useRef<boolean>(false);
+  const totalCratesRef = useRef<number>(2);
+
+  // Settle the active mission exactly once — only once every transmitter crate
+  // is salvaged AND the vessel is berthed at the marina. Early exits never
+  // settle, so a cruise cannot farm mission rewards.
+  const settleMission = useCallback(() => {
+    const scenario = scenarioRef.current;
+    if (!scenario || missionSettledRef.current) return;
+    const crates = hazardsRef.current.filter(h => h.type === 'crate' && h.collected).length;
+    if (!isDockedRef.current || crates < totalCratesRef.current) return;
+    missionSettledRef.current = true;
+    const w = scenario.scoreWeights || {};
+    const score = Math.round(
+      coinsRef.current * (w.coin ?? 2) +
+      hullRef.current * (w.hull ?? 2) +
+      (w.dockBonus ?? 100)
+    );
+    onMissionResult?.({
+      missionId: scenario.missionId,
+      gameId: scenario.gameId,
+      score,
+      outcome: 'completed',
+      stats: {
+        coins: coinsRef.current,
+        hull: Math.round(hullRef.current),
+        crates,
+        docked: 1
+      }
+    });
+  }, [onMissionResult]);
 
   // Fog horn blast
   const soundHorn = useCallback(() => {
@@ -150,22 +195,33 @@ export const BoatingGameModal: React.FC<BoatingGameModalProps> = ({
     setHullIntegrity(100);
     setIsSunk(false);
     setDockedSuccessfully(false);
+    missionSettledRef.current = false;
 
-    // Populate Waterway channel hazards, buoys, bridge arches, and docking berth
+    // Populate Waterway channel hazards, buoys, bridge arches, and docking berth.
+    // Mission scenarios tune channel tightness and ferry traffic (bounded values).
+    const quayMargin = scenarioRef.current?.quayMargin ?? 70;
+    const ferrySpeed = scenarioRef.current?.ferrySpeed ?? 18;
+    const ferryCount = scenarioRef.current?.ferryCount ?? 1;
     hazardsRef.current = [
       // Channel markers (green starboard, red port)
-      { x: 180, y: 320, width: 14, height: 14, type: 'buoy_green' },
-      { x: canvas.width - 180, y: 320, width: 14, height: 14, type: 'buoy_red' },
-      { x: 200, y: 180, width: 14, height: 14, type: 'buoy_green' },
-      { x: canvas.width - 200, y: 180, width: 14, height: 14, type: 'buoy_red' },
-      // Floating Salvage Crates
+      { x: quayMargin + 100, y: 320, width: 14, height: 14, type: 'buoy_green' },
+      { x: canvas.width - quayMargin - 100, y: 320, width: 14, height: 14, type: 'buoy_red' },
+      { x: quayMargin + 120, y: 180, width: 14, height: 14, type: 'buoy_green' },
+      { x: canvas.width - quayMargin - 120, y: 180, width: 14, height: 14, type: 'buoy_red' },
+      // Floating Salvage Crates (transmitter crates on missions)
       { x: 280, y: 260, width: 22, height: 22, type: 'crate' },
       { x: 420, y: 140, width: 22, height: 22, type: 'crate' },
-      // Moving river ferry
-      { x: 150, y: 220, width: 70, height: 26, type: 'ferry', vx: 18 },
+      // Moving river ferries
+      { x: 150, y: 220, width: 70, height: 26, type: 'ferry', vx: ferrySpeed },
+      ...(ferryCount > 1
+        ? [{ x: canvas.width - 150, y: 330, width: 70, height: 26, type: 'ferry' as const, vx: -ferrySpeed }]
+        : []),
       // Destination Marina Berthing Slip
       { x: canvas.width / 2 - 45, y: 40, width: 90, height: 35, type: 'dock', label: 'CITY MARINA DOCK' }
     ];
+    totalCratesRef.current = hazardsRef.current.filter(h => h.type === 'crate').length;
+    setTotalCrates(totalCratesRef.current);
+    setCratesCollected(0);
 
     const simLoop = (currentTime: number) => {
       const dt = Math.min((currentTime - lastTimeRef.current) / 1000, 0.1);
@@ -185,8 +241,9 @@ export const BoatingGameModal: React.FC<BoatingGameModalProps> = ({
       boatPosRef.current.x += Math.sin(rad) * boatSpeedRef.current * dt;
       boatPosRef.current.y -= Math.cos(rad) * boatSpeedRef.current * dt;
 
-      // Boundary clamp inside channel
-      boatPosRef.current.x = Math.max(70, Math.min(canvas.width - 70, boatPosRef.current.x));
+      // Boundary clamp inside channel (mission scenarios may tighten the quays)
+      const quayMargin = scenarioRef.current?.quayMargin ?? 70;
+      boatPosRef.current.x = Math.max(quayMargin, Math.min(canvas.width - quayMargin, boatPosRef.current.x));
       boatPosRef.current.y = Math.max(30, Math.min(canvas.height - 30, boatPosRef.current.y));
 
       // Wake particles behind stern
@@ -228,6 +285,7 @@ export const BoatingGameModal: React.FC<BoatingGameModalProps> = ({
           coinsRef.current += 30;
           soundEffects.playCoinSound();
           gamepadManager.vibrate(60, 0.4, 0.2);
+          settleMission(); // last crate after docking completes the mission
         } else if (h.type === 'ferry' && dist < 40 && !isSunkRef.current) {
           // Ferry collision — 20% hull damage
           hullRef.current = Math.max(0, hullRef.current - 20);
@@ -248,12 +306,13 @@ export const BoatingGameModal: React.FC<BoatingGameModalProps> = ({
             coinsRef.current += speedBonus;
             setDockedSuccessfully(true);
             soundEffects.playTriumphChime();
+            settleMission(); // docking with all crates aboard completes the mission
           }
         }
       });
 
       // Quay wall collision (running aground)
-      if (boatPosRef.current.x < 80 || boatPosRef.current.x > canvas.width - 80) {
+      if (boatPosRef.current.x < quayMargin + 10 || boatPosRef.current.x > canvas.width - quayMargin - 10) {
         if (!isSunkRef.current) {
           hullRef.current = Math.max(0, hullRef.current - 10 * dt * 2);
           setHullIntegrity(Math.round(hullRef.current));
@@ -273,6 +332,7 @@ export const BoatingGameModal: React.FC<BoatingGameModalProps> = ({
       setHeading(Math.round(boatHeadingRef.current));
       setDepthMeters(+(12 + Math.sin(currentTime * 0.001) * 2.5).toFixed(1));
       setCoinsGathered(coinsRef.current);
+      setCratesCollected(hazardsRef.current.filter(h => h.type === 'crate' && h.collected).length);
 
       // ----------------------------------------------------
       // RENDER SIMULATION CANVAS
@@ -330,7 +390,7 @@ export const BoatingGameModal: React.FC<BoatingGameModalProps> = ({
     return () => {
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
     };
-  }, [isOpen]);
+  }, [isOpen, settleMission]);
 
   const handleFinish = () => {
     if (coinsRef.current > 0 && !runSettledRef.current) {
@@ -376,6 +436,17 @@ export const BoatingGameModal: React.FC<BoatingGameModalProps> = ({
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {/* Mission objective banner (World Expedition Command) */}
+        <MissionHUD
+          scenario={missionScenario}
+          progressLabel={`Crates ${cratesCollected}/${totalCrates}`}
+          secondaryLabel={
+            dockedSuccessfully
+              ? `Docked ✓ • Hull ${hullIntegrity}%`
+              : `Undocked • Hull ${hullIntegrity}%`
+          }
+        />
 
         {/* Live Canvas Viewport */}
         <div className="relative w-full h-[460px] bg-sky-950 flex items-center justify-center overflow-hidden">

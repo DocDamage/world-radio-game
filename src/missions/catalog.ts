@@ -26,7 +26,8 @@ export const MISSION_CATALOG: MissionDefinition[] = [
     medalThresholds: { bronze: 1200, silver: 1800, gold: 2400 },
     rewards: { coins: 35, xp: 50 },
     contextLabel: 'Inspired by real street topography & bicycle network routes',
-    expansionRef: 'O01/O18'
+    expansionRef: 'O01/O18',
+    status: 'live'
   },
 
   // 2. Boating - Harbor Radio Run
@@ -55,7 +56,8 @@ export const MISSION_CATALOG: MissionDefinition[] = [
     rewards: { coins: 40, xp: 60 },
     supportedBiomes: ['coastal', 'river'],
     contextLabel: 'Modeled on maritime navigation channels & port charts',
-    expansionRef: 'O04/O17'
+    expansionRef: 'O04/O17',
+    status: 'live'
   },
 
   // 3. Fishing - River Field Journal

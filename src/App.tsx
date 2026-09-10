@@ -27,7 +27,11 @@ import { gamepadManager } from './services/gamepadManager';
 import { dlss5 } from './services/dlss5Engine';
 import { travelerState } from './services/travelerState';
 import { inputManager } from './services/inputManager';
-import type { GameId } from './missions/types';
+import { missionSession } from './missions/session';
+import { buildScenario } from './missions/scenarios';
+import { MISSION_CATALOG, EXPEDITIONS } from './missions/catalog';
+import { MissionResults, type MissionDebriefData } from './components/MissionResults';
+import type { GameId, MissionScenario, MissionResultPayload } from './missions/types';
 
 // Code-split heavy 3D Globe, Street View, and Mini-Game Modals to optimize bundle size
 const WorldGlobe = lazy(() => import('./components/WorldGlobe').then(m => ({ default: m.WorldGlobe })));
@@ -78,6 +82,11 @@ export function App() {
   const [isDlssModalOpen, setIsDlssModalOpen] = useState<boolean>(false);
   const [isMissionBoardOpen, setIsMissionBoardOpen] = useState<boolean>(false);
   const [isWorldMonitorOpen, setIsWorldMonitorOpen] = useState<boolean>(false);
+
+  // Active mission run: scenario params passed into the game, and the debrief
+  // shown once missionSession settles the run (coins/XP/medal/expedition).
+  const [missionScenario, setMissionScenario] = useState<MissionScenario | null>(null);
+  const [missionDebrief, setMissionDebrief] = useState<MissionDebriefData | null>(null);
 
   // Synchronize traveler state reactively
   const [traveler, setTraveler] = useState(() => travelerState.getState());
@@ -468,9 +477,18 @@ export function App() {
     }));
   };
 
-  // Launch a mini-game from the Mission Board.
+  // Launch a mini-game from the Mission Board. When launched for an active
+  // mission, the game receives that mission's scenario so the run counts.
   // 'hunt' and 'detective' are world modes; the rest are activity modals.
-  const handleLaunchGame = (gameId: GameId) => {
+  const handleLaunchGame = (gameId: GameId, missionId?: string) => {
+    const session = missionSession.getCurrentSession();
+    const missionActive = Boolean(
+      missionId && session && session.mission.id === missionId && !session.completed
+    );
+    setMissionScenario(
+      missionActive && session ? buildScenario(session.mission, session.chosenOptionId) : null
+    );
+    setMissionDebrief(null);
     if (gameId === 'hunt') {
       startSignalHunt();
       return;
@@ -480,6 +498,70 @@ export function App() {
       return;
     }
     setActivityMode(gameId as ActivityMode);
+  };
+
+  // Settle a finished mission run: medal-scaled coins/XP are awarded exactly
+  // once by missionSession, any active expedition advances, then we debrief.
+  const handleMissionResult = useCallback((payload: MissionResultPayload) => {
+    const session = missionSession.getCurrentSession();
+    if (!session || session.mission.id !== payload.missionId) return;
+    const result = missionSession.completeCurrentMission(payload.score);
+    if (!result.success) return;
+
+    let expedition: MissionDebriefData['expedition'] = null;
+    if (session.expeditionId) {
+      const exp = EXPEDITIONS.find(e => e.id === session.expeditionId);
+      const active = missionSession.getActiveExpedition();
+      if (exp) {
+        const nextMission = result.nextMissionId
+          ? MISSION_CATALOG.find(m => m.id === result.nextMissionId)
+          : undefined;
+        expedition = {
+          title: exp.title,
+          stageIndex: result.isExpeditionComplete
+            ? exp.stageMissionIds.length
+            : (active?.stageIndex ?? 0),
+          totalStages: exp.stageMissionIds.length,
+          nextMissionId: nextMission?.id,
+          nextMissionTitle: nextMission?.title,
+          nextMissionPlayable: nextMission?.status === 'live',
+          isComplete: result.isExpeditionComplete
+        };
+      }
+    }
+
+    setMissionDebrief({
+      missionTitle: session.mission.title,
+      missionSubtitle: session.mission.subtitle,
+      medal: result.medal,
+      score: payload.score,
+      thresholds: session.mission.medalThresholds,
+      coinsAwarded: result.coinsAwarded,
+      xpAwarded: result.xpAwarded,
+      outcome: payload.outcome,
+      stats: payload.stats,
+      expedition
+    });
+  }, []);
+
+  const closeMissionDebrief = () => {
+    setMissionDebrief(null);
+    setMissionScenario(null);
+    setActivityMode('none'); // the finished game modal is still open underneath
+  };
+
+  // Continue an in-progress expedition: start the next leg's session and jump in
+  const continueExpeditionLeg = () => {
+    const debrief = missionDebrief;
+    setMissionDebrief(null);
+    const nextId = debrief?.expedition?.nextMissionId;
+    if (!nextId) return;
+    const mission = MISSION_CATALOG.find(m => m.id === nextId);
+    const active = missionSession.getActiveExpedition();
+    if (!mission || mission.status !== 'live' || !active) return;
+    missionSession.startMission(mission.id, mission.choices[0]?.id, active.expeditionId, active.stageIndex);
+    setMissionScenario(buildScenario(mission, mission.choices[0]?.id));
+    setActivityMode(mission.gameId as ActivityMode);
   };
 
   // Global Keyboard Shortcuts
@@ -931,6 +1013,15 @@ export function App() {
         activeStationName={activeStation?.name || ''}
       />
 
+      {/* Mission debrief (medal, rewards, expedition progress) */}
+      {missionDebrief && (
+        <MissionResults
+          data={missionDebrief}
+          onClose={closeMissionDebrief}
+          onNextMission={continueExpeditionLeg}
+        />
+      )}
+
       {/* Full 2.5D Road Cycling Arcade Game */}
       <BicycleGameModal
         isOpen={activityMode === 'bike'}
@@ -941,6 +1032,8 @@ export function App() {
         onEarnCoins={handleEarnCoins}
         highScore={highScores.bike}
         onUpdateHighScore={(s) => handleUpdateHighScore('bike', s)}
+        missionScenario={missionScenario}
+        onMissionResult={handleMissionResult}
       />
 
       {/* Full Naval Watercraft Navigation Simulator */}
@@ -954,6 +1047,8 @@ export function App() {
         onEarnCoins={handleEarnCoins}
         highScore={highScores.boat}
         onUpdateHighScore={(s) => handleUpdateHighScore('boat', s)}
+        missionScenario={missionScenario}
+        onMissionResult={handleMissionResult}
       />
 
       {/* 2D Depth Cross-Section Fishing Simulator */}

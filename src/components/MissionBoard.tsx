@@ -31,7 +31,13 @@ export const MissionBoard: React.FC<MissionBoardProps> = ({
   const completedMissions = travelerState.getState().completedMissions;
   const completedExpeditions = travelerState.getState().completedExpeditions;
 
+  // Honest feature labeling: only missions wired end-to-end into a game can start
+  const isPlayable = (m: MissionDefinition) => m.status === 'live';
+  const isExpeditionPlayable = (exp: ExpeditionDefinition) =>
+    exp.stageMissionIds.every(id => MISSION_CATALOG.find(m => m.id === id)?.status === 'live');
+
   const handleStartMission = (mission: MissionDefinition, choiceId: string) => {
+    if (!isPlayable(mission)) return;
     missionSession.startMission(mission.id, choiceId);
     soundEffects.playUiClick(0.2);
     onLaunchGame(mission.gameId, mission.id);
@@ -39,6 +45,7 @@ export const MissionBoard: React.FC<MissionBoardProps> = ({
   };
 
   const handleStartExpedition = (exp: ExpeditionDefinition) => {
+    if (!isExpeditionPlayable(exp)) return;
     const res = missionSession.startExpedition(exp.id);
     if (res.success && res.firstMissionId) {
       const firstMission = MISSION_CATALOG.find(m => m.id === res.firstMissionId);
@@ -136,6 +143,15 @@ export const MissionBoard: React.FC<MissionBoardProps> = ({
                         <span className="text-[10px] uppercase font-mono font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">
                           {mission.gameId}
                         </span>
+                        {isPlayable(mission) ? (
+                          <span className="text-[9px] uppercase font-mono font-bold px-1.5 py-0.5 rounded bg-lime-950 text-lime-400 border border-lime-500/40">
+                            Live
+                          </span>
+                        ) : (
+                          <span className="text-[9px] uppercase font-mono font-bold px-1.5 py-0.5 rounded bg-amber-950/70 text-amber-400 border border-amber-500/40">
+                            Planned
+                          </span>
+                        )}
                         <h4 className="text-xs font-bold text-slate-100 truncate">
                           {mission.title}
                         </h4>
@@ -296,12 +312,22 @@ export const MissionBoard: React.FC<MissionBoardProps> = ({
                     <span className="text-sky-400 font-bold">+{selectedMission.rewards.xp} XP</span>
                   </div>
 
-                  <button
-                    onClick={() => handleStartMission(selectedMission, selectedChoiceId)}
-                    className="px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-wider bg-lime-400 hover:bg-lime-300 text-slate-950 shadow-lg shadow-lime-400/20 flex items-center gap-2 transition active:scale-95"
-                  >
-                    <Play className="w-4 h-4 fill-slate-950" /> Start Mission
-                  </button>
+                  {isPlayable(selectedMission) ? (
+                    <button
+                      onClick={() => handleStartMission(selectedMission, selectedChoiceId)}
+                      className="px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-wider bg-lime-400 hover:bg-lime-300 text-slate-950 shadow-lg shadow-lime-400/20 flex items-center gap-2 transition active:scale-95"
+                    >
+                      <Play className="w-4 h-4 fill-slate-950" /> Start Mission
+                    </button>
+                  ) : (
+                    <button
+                      disabled
+                      className="px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-wider bg-slate-800 text-slate-500 border border-slate-700 flex items-center gap-2 cursor-not-allowed"
+                      title="This mission is not wired into its mini-game yet"
+                    >
+                      <Play className="w-4 h-4" /> Coming Soon
+                    </button>
+                  )}
                 </div>
               </>
             ) : (
@@ -369,13 +395,28 @@ export const MissionBoard: React.FC<MissionBoardProps> = ({
                   </div>
                 </div>
 
-                <div className="pt-2 flex justify-end">
-                  <button
-                    onClick={() => handleStartExpedition(selectedExpedition)}
-                    className="px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-wider bg-lime-400 hover:bg-lime-300 text-slate-950 shadow-lg shadow-lime-400/20 flex items-center gap-2 transition active:scale-95"
-                  >
-                    <Play className="w-4 h-4 fill-slate-950" /> Begin Expedition
-                  </button>
+                <div className="pt-2 flex flex-col items-end gap-2">
+                  {isExpeditionPlayable(selectedExpedition) ? (
+                    <button
+                      onClick={() => handleStartExpedition(selectedExpedition)}
+                      className="px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-wider bg-lime-400 hover:bg-lime-300 text-slate-950 shadow-lg shadow-lime-400/20 flex items-center gap-2 transition active:scale-95"
+                    >
+                      <Play className="w-4 h-4 fill-slate-950" /> Begin Expedition
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        disabled
+                        className="px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-wider bg-slate-800 text-slate-500 border border-slate-700 flex items-center gap-2 cursor-not-allowed"
+                        title="Some legs of this expedition are not playable yet"
+                      >
+                        <Play className="w-4 h-4" /> Begin Expedition
+                      </button>
+                      <span className="text-[10px] text-amber-400 font-mono">
+                        Locked until all legs are live
+                      </span>
+                    </>
+                  )}
                 </div>
               </>
             )}

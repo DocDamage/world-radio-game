@@ -3,7 +3,9 @@ import { Bike, Bell, X, Zap, Wind, Trophy, Sparkles, AlertTriangle, RotateCcw } 
 import confetti from 'canvas-confetti';
 import { soundEffects } from '../services/audioEffects';
 import { gamepadManager } from '../services/gamepadManager';
+import { MissionHUD } from './MissionHUD';
 import type { EnvironmentType } from '../types';
+import type { MissionScenario, MissionResultPayload } from '../missions/types';
 
 interface BicycleGameModalProps {
   isOpen: boolean;
@@ -14,6 +16,10 @@ interface BicycleGameModalProps {
   onEarnCoins: (amount: number) => void;
   highScore?: number;
   onUpdateHighScore?: (score: number) => void;
+  /** Active World Expedition mission scenario (null = free arcade ride) */
+  missionScenario?: MissionScenario | null;
+  /** Emitted exactly once when an active mission run settles */
+  onMissionResult?: (payload: MissionResultPayload) => void;
 }
 
 type BicycleState = 'riding' | 'crashed' | 'finished';
@@ -37,7 +43,9 @@ export const BicycleGameModal: React.FC<BicycleGameModalProps> = ({
   biome,
   onEarnCoins,
   highScore = 0,
-  onUpdateHighScore
+  onUpdateHighScore,
+  missionScenario,
+  onMissionResult
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -53,7 +61,40 @@ export const BicycleGameModal: React.FC<BicycleGameModalProps> = ({
   const [nearMissCount, setNearMissCount] = useState<number>(0);
   const [comboMultiplier, setComboMultiplier] = useState<number>(1);
   const [isDrafting, setIsDrafting] = useState<boolean>(false);
-  const FINISH_DISTANCE = 2000;
+  // Route length: mission scenarios tune it (e.g. 1,600m incline vs 2,200m avenue)
+  const finishDistance = missionScenario?.finishDistance ?? 2000;
+
+  // Mission context (World Expedition Command). Kept in a ref so the 60fps loop
+  // and event handlers always read the latest scenario without re-subscribing.
+  const scenarioRef = useRef<MissionScenario | null | undefined>(undefined);
+  scenarioRef.current = missionScenario;
+  const missionSettledRef = useRef<boolean>(false);
+
+  // Settle the active mission exactly once — only when the route is completed.
+  // Crashes and early exits never settle, so retrying is never punished and
+  // quitting mid-ride can never farm mission rewards.
+  const settleMission = useCallback(() => {
+    const scenario = scenarioRef.current;
+    if (!scenario || missionSettledRef.current) return;
+    missionSettledRef.current = true;
+    const w = scenario.scoreWeights || {};
+    const score = Math.round(
+      distanceRef.current +
+      coinsRef.current * (w.coin ?? 5) +
+      nearMissRef.current * (w.nearMiss ?? 10)
+    );
+    onMissionResult?.({
+      missionId: scenario.missionId,
+      gameId: scenario.gameId,
+      score,
+      outcome: 'completed',
+      stats: {
+        distance: Math.round(distanceRef.current),
+        coins: coinsRef.current,
+        nearMisses: nearMissRef.current
+      }
+    });
+  }, [onMissionResult]);
 
   // Internal mutable refs for 60fps game loop
   const gameStateRef = useRef<BicycleState>('riding');
@@ -101,7 +142,7 @@ export const BicycleGameModal: React.FC<BicycleGameModalProps> = ({
     if (gameStateRef.current !== 'riding') return;
     // Gear determines acceleration vs top speed
     const maxSpeedByGear = [16, 24, 34, 42, 52][gearRef.current - 1];
-    const accel = [5.5, 4.8, 4.0, 3.2, 2.5][gearRef.current - 1];
+    const accel = [5.5, 4.8, 4.0, 3.2, 2.5][gearRef.current - 1] * (scenarioRef.current?.accelScale ?? 1);
 
     speedRef.current = Math.min(maxSpeedByGear, speedRef.current + accel);
     pedalTimerRef.current = 0.4;
@@ -166,6 +207,7 @@ export const BicycleGameModal: React.FC<BicycleGameModalProps> = ({
     distanceRef.current = 0;
     coinsRef.current = 0;
     playerXRef.current = 0;
+    missionSettledRef.current = false;
 
     // Pre-populate initial coins and obstacles
     for (let i = 0; i < 7; i++) {
@@ -173,8 +215,22 @@ export const BicycleGameModal: React.FC<BicycleGameModalProps> = ({
     }
 
     function spawnObstacle(startZ: number) {
-      const types: Obstacle['type'][] = ['coin', 'coin', 'coin', 'car', 'taxi', 'scooter', 'pedestrian', 'cone'];
-      const type = types[Math.floor(Math.random() * types.length)];
+      // Mission scenarios tune the coin/hazard mix via bounded density weights
+      // (base pool: 3 coins vs 5 hazards — identical odds to the original array pick)
+      const coinWeight = 3 * (scenarioRef.current?.coinDensity ?? 1);
+      const hazardWeight = 5 * (scenarioRef.current?.trafficDensity ?? 1);
+      const roll = Math.random() * (coinWeight + hazardWeight);
+      let type: Obstacle['type'];
+      if (roll < coinWeight) {
+        type = 'coin';
+      } else {
+        const hazards: Obstacle['type'][] = ['car', 'taxi', 'scooter', 'pedestrian', 'cone'];
+        const idx = Math.min(
+          hazards.length - 1,
+          Math.floor(((roll - coinWeight) / hazardWeight) * hazards.length)
+        );
+        type = hazards[idx];
+      }
       const x = (Math.random() - 0.5) * 1.5;
       const speed = type === 'coin' || type === 'cone' ? 0 : type === 'pedestrian' ? 1.5 : 8 + Math.random() * 8;
 
@@ -254,7 +310,7 @@ export const BicycleGameModal: React.FC<BicycleGameModalProps> = ({
         }
 
         // Check Finish Line
-        if (distanceRef.current >= FINISH_DISTANCE) {
+        if (distanceRef.current >= finishDistance) {
           gameStateRef.current = 'finished';
           setGameState('finished');
           const bonusCoins = 50 + Math.round(nearMissRef.current * 3);
@@ -265,6 +321,7 @@ export const BicycleGameModal: React.FC<BicycleGameModalProps> = ({
           }
           confetti({ particleCount: 90, spread: 70, origin: { y: 0.6 } });
           soundEffects.playTriumphChime(0.5);
+          settleMission(); // mission settles exactly once, on route completion
         }
 
         // Road curve swaying
@@ -396,7 +453,7 @@ export const BicycleGameModal: React.FC<BicycleGameModalProps> = ({
     return () => {
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
     };
-  }, [isOpen, biome, highScore, onUpdateHighScore]);
+  }, [isOpen, biome, highScore, onUpdateHighScore, finishDistance, settleMission]);
 
   // Restart Run (settles any earned coins from prior attempt before restarting)
   const handleRestart = () => {
@@ -473,6 +530,13 @@ export const BicycleGameModal: React.FC<BicycleGameModalProps> = ({
             </button>
           </div>
         </div>
+
+        {/* Mission objective banner (World Expedition Command) */}
+        <MissionHUD
+          scenario={missionScenario}
+          progressLabel={`${distanceMeters} / ${finishDistance} m`}
+          secondaryLabel={`Coins ${coinsCollected} • Near-miss ${nearMissCount}`}
+        />
 
         {/* Live Arcade Canvas Viewport */}
         <div className="relative w-full h-[460px] bg-slate-950 flex items-center justify-center overflow-hidden">
@@ -551,7 +615,7 @@ export const BicycleGameModal: React.FC<BicycleGameModalProps> = ({
           <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-10 w-64 bg-slate-900/80 backdrop-blur-sm border border-slate-700/60 rounded-full h-3 overflow-hidden">
             <div
               className="bg-gradient-to-r from-lime-400 to-emerald-400 h-full transition-all duration-200"
-              style={{ width: `${Math.min(100, (distanceMeters / FINISH_DISTANCE) * 100)}%` }}
+              style={{ width: `${Math.min(100, (distanceMeters / finishDistance) * 100)}%` }}
             />
           </div>
 
@@ -652,7 +716,7 @@ export const BicycleGameModal: React.FC<BicycleGameModalProps> = ({
                 Grand Prix Finished!
               </h2>
               <p className="text-xs text-slate-300 max-w-sm mb-4">
-                You navigated 2,000 meters of urban traffic through the bustling avenues of {cityName}!
+                You navigated {finishDistance.toLocaleString()} meters of urban traffic through the bustling avenues of {cityName}!
               </p>
               <div className="flex items-center gap-6 bg-slate-900/90 border border-slate-800 px-6 py-3 rounded-2xl text-xs font-mono mb-5">
                 <div>

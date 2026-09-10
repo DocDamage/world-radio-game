@@ -1,21 +1,22 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Camera, Eye, X, ExternalLink, RefreshCw, LayoutGrid, Maximize2, Radio, Activity, Sun, Compass, AlertCircle } from 'lucide-react';
 import { WORLD_CAMERAS, type WorldCamera, type CameraCategory } from '../services/cctvCatalog';
 import { soundEffects } from '../services/audioEffects';
 import { travelerState } from '../services/travelerState';
 import { useModalA11y } from '../hooks/useModalA11y';
+import { useLiveFeed } from '../hooks/useLiveFeed';
+import {
+  fetchQuakes,
+  fetchEonetEvents,
+  fetchSpaceWeather,
+  distanceKm,
+  type QuakeEvent,
+  type EonetEvent,
+  type SpaceWeatherReport
+} from '../services/worldFeeds';
 import type { BackpackItem } from '../types';
 
-// USGS real-time earthquake GeoJSON summary feed (M2.5+ events, past 24 hours)
-const USGS_FEED_URL = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson';
-
-interface QuakeEvent {
-  id: string;
-  mag: number;
-  place: string;
-  time: number;   // epoch ms
-  depthKm: number;
-}
+const DEFAULT_PINNED_CAM_IDS = ['cam-tokyo-shibuya', 'cam-paris-eiffel', 'cam-nyc-times-square', 'cam-venice-grand-canal'];
 
 interface WorldMonitorModalProps {
   isOpen: boolean;
@@ -33,7 +34,19 @@ export const WorldMonitorModal: React.FC<WorldMonitorModalProps> = ({
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<CameraCategory | 'all'>('all');
   const [activeCam, setActiveCam] = useState<WorldCamera>(WORLD_CAMERAS[0]);
-  const [pinnedCamIds] = useState<string[]>(['cam-tokyo-shibuya', 'cam-paris-eiffel', 'cam-nyc-times-square', 'cam-venice-grand-canal']);
+  const [pinnedCamIds, setPinnedCamIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('world_radio_pinned_cams');
+      const parsed = saved ? (JSON.parse(saved) as unknown) : null;
+      if (Array.isArray(parsed)) {
+        const valid = parsed.filter((id): id is string => typeof id === 'string' && WORLD_CAMERAS.some(c => c.id === id));
+        return valid.length > 0 ? valid.slice(0, 4) : DEFAULT_PINNED_CAM_IDS;
+      }
+    } catch {
+      // corrupted saved pins fall back to the defaults
+    }
+    return DEFAULT_PINNED_CAM_IDS;
+  });
   const [viewMode, setViewMode] = useState<'single' | 'wall'>('single');
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [postcardSavedMsg, setPostcardSavedMsg] = useState<string>('');
@@ -52,11 +65,14 @@ export const WorldMonitorModal: React.FC<WorldMonitorModalProps> = ({
     if (match) setActiveCam(match);
   }
 
-  // Live USGS seismic feed (M2.5+, past 24h) — fetched when the monitor opens
-  const [quakes, setQuakes] = useState<QuakeEvent[]>([]);
-  const [quakeStatus, setQuakeStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle');
-  const [quakeFetchedAt, setQuakeFetchedAt] = useState<number | null>(null);
-  const [quakeError, setQuakeError] = useState<string>('');
+  // Live telemetry feeds: USGS seismic, NASA EONET natural events, NOAA space
+  // weather. Each loads while the monitor is open, with per-feed retry.
+  const quakeFeed = useLiveFeed<QuakeEvent[]>(isOpen, fetchQuakes);
+  const eventFeed = useLiveFeed<EonetEvent[]>(isOpen, fetchEonetEvents);
+  const spaceFeed = useLiveFeed<SpaceWeatherReport>(isOpen, fetchSpaceWeather);
+  const quakes = quakeFeed.data || [];
+  const quakeStatus = quakeFeed.status;
+  const quakeFetchedAt = quakeFeed.fetchedAt;
 
   // Clock for "X min ago" labels. Reading Date.now() during render would be
   // impure, so the timestamp lives in state and ticks once a minute while the
@@ -67,52 +83,6 @@ export const WorldMonitorModal: React.FC<WorldMonitorModalProps> = ({
     const clock = setInterval(() => setNowMs(Date.now()), 60000);
     return () => clearInterval(clock);
   }, [isOpen]);
-
-  const fetchQuakes = useCallback(async () => {
-    setQuakeStatus('loading');
-    setQuakeError('');
-    try {
-      const res = await fetch(USGS_FEED_URL);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const geo = await res.json();
-      const events: QuakeEvent[] = ((geo.features as unknown[] | undefined) || [])
-        .map((f): QuakeEvent => {
-          const feature = f as {
-            id: string;
-            properties?: { mag?: number; place?: string; time?: number };
-            geometry?: { coordinates?: number[] };
-          };
-          return {
-            id: feature.id,
-            mag: typeof feature.properties?.mag === 'number' ? feature.properties.mag : 0,
-            place: feature.properties?.place || 'Unknown region',
-            time: typeof feature.properties?.time === 'number' ? feature.properties.time : Date.now(),
-            depthKm: Math.round(feature.geometry?.coordinates?.[2] ?? 0)
-          };
-        })
-        .sort((a, b) => b.time - a.time);
-      setQuakes(events);
-      setQuakeFetchedAt(Date.now());
-      setQuakeStatus('ok');
-    } catch (err) {
-      setQuakeError(err instanceof Error ? err.message : 'Network error');
-      setQuakeStatus('error');
-    }
-  }, []);
-
-  // Fetch the live feed when the monitor opens. The fetch is deferred to a
-  // microtask so its synchronous loading-state transition doesn't run inside
-  // the effect body (which would trigger cascading renders).
-  useEffect(() => {
-    if (!isOpen) return;
-    let cancelled = false;
-    void Promise.resolve().then(() => {
-      if (!cancelled) fetchQuakes();
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [isOpen, fetchQuakes]);
 
   // Camera feed capability checks: public CCTV stills can be offline, rate
   // limited, or geo-blocked — track per-feed load state and offer cache-busting
@@ -162,9 +132,23 @@ export const WorldMonitorModal: React.FC<WorldMonitorModalProps> = ({
     }
     setIsRefreshing(true);
     soundEffects.playUiClick(0.15);
-    fetchQuakes();
+    void quakeFeed.refresh();
+    void eventFeed.refresh();
+    void spaceFeed.refresh();
     setFeedReloadToken(t => t + 1);
     setTimeout(() => setIsRefreshing(false), 600);
+  };
+
+  // Camera wall pinning: up to four feeds, persisted in localStorage.
+  const togglePinCam = (cam: WorldCamera) => {
+    soundEffects.playUiClick(0.15);
+    setPinnedCamIds(prev => {
+      const next = prev.includes(cam.id)
+        ? prev.filter(id => id !== cam.id)
+        : [...prev, cam.id].slice(-4);
+      localStorage.setItem('world_radio_pinned_cams', JSON.stringify(next));
+      return next;
+    });
   };
 
   const handleTakePostcard = (cam: WorldCamera) => {
@@ -207,11 +191,11 @@ export const WorldMonitorModal: React.FC<WorldMonitorModalProps> = ({
                   World Monitor & Camera Wall
                 </h2>
                 <span className="text-[10px] font-mono bg-emerald-950 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-bold">
-                  CAMERAS + LIVE USGS FEED
+                  CAMERAS + LIVE FEEDS
                 </span>
               </div>
               <p className="text-xs text-slate-400">
-                Public camera streams • Live USGS seismic data • Synchronized with your radio soundtrack
+                Public camera streams • Live USGS seismic, NASA EONET &amp; NOAA space weather • Synchronized with your radio soundtrack
               </p>
             </div>
           </div>
@@ -237,7 +221,7 @@ export const WorldMonitorModal: React.FC<WorldMonitorModalProps> = ({
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
-                <LayoutGrid className="w-3.5 h-3.5" /> 4-Feed Wall
+                <LayoutGrid className="w-3.5 h-3.5" /> Pinned Wall
               </button>
             </div>
 
@@ -397,6 +381,18 @@ export const WorldMonitorModal: React.FC<WorldMonitorModalProps> = ({
 
                     <div className="flex items-center gap-2">
                       <button
+                        onClick={() => togglePinCam(activeCam)}
+                        className={`px-3.5 py-1.5 rounded-xl font-bold transition flex items-center gap-1.5 ${
+                          pinnedCamIds.includes(activeCam.id)
+                            ? 'bg-emerald-400 text-slate-950'
+                            : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
+                        }`}
+                        title={pinnedCamIds.includes(activeCam.id) ? 'Remove from camera wall' : 'Pin to camera wall (max 4 feeds)'}
+                      >
+                        {pinnedCamIds.includes(activeCam.id) ? '📌 Pinned' : '📌 Pin to Wall'}
+                      </button>
+
+                      <button
                         onClick={() => handleTakePostcard(activeCam)}
                         className="px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold transition flex items-center gap-1.5"
                       >
@@ -416,8 +412,8 @@ export const WorldMonitorModal: React.FC<WorldMonitorModalProps> = ({
                   </div>
                 </div>
 
-                {/* Environmental Overview Telemetry (live USGS + planned feeds) */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {/* Environmental Overview Telemetry (live USGS + NASA EONET + NOAA SWPC) */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
                   <div className="bg-slate-900/60 border border-slate-800 p-3 rounded-2xl flex items-start gap-3">
                     <Activity className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
                     <div className="min-w-0 flex-1">
@@ -438,9 +434,9 @@ export const WorldMonitorModal: React.FC<WorldMonitorModalProps> = ({
                       {quakeStatus === 'error' && (
                         <div>
                           <div className="text-xs font-bold text-rose-400">Live feed unavailable</div>
-                          <div className="text-[10px] text-slate-400">{quakeError}</div>
+                          <div className="text-[10px] text-slate-400">{quakeFeed.error}</div>
                           <button
-                            onClick={fetchQuakes}
+                            onClick={() => void quakeFeed.refresh()}
                             className="mt-1 text-[10px] font-mono text-amber-400 hover:text-amber-300 underline"
                           >
                             Retry now
@@ -478,11 +474,116 @@ export const WorldMonitorModal: React.FC<WorldMonitorModalProps> = ({
                   </div>
 
                   <div className="bg-slate-900/60 border border-slate-800 p-3 rounded-2xl flex items-start gap-3">
+                    <Activity className="w-5 h-5 text-orange-400 shrink-0 mt-0.5" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-[10px] font-mono uppercase text-slate-400">Earth Events (NASA EONET)</div>
+                        <a
+                          href="https://eonet.gsfc.nasa.gov/"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[9px] font-mono text-emerald-400 hover:text-emerald-300 shrink-0"
+                        >
+                          source ↗
+                        </a>
+                      </div>
+                      {eventFeed.status === 'loading' && (
+                        <div className="text-xs text-slate-300 font-bold animate-pulse">Fetching natural events…</div>
+                      )}
+                      {eventFeed.status === 'error' && (
+                        <div>
+                          <div className="text-xs font-bold text-rose-400">Live feed unavailable</div>
+                          <button
+                            onClick={() => void eventFeed.refresh()}
+                            className="mt-1 text-[10px] font-mono text-amber-400 hover:text-amber-300 underline"
+                          >
+                            Retry now
+                          </button>
+                        </div>
+                      )}
+                      {eventFeed.status === 'ok' && (eventFeed.data || []).length === 0 && (
+                        <div className="text-xs font-bold text-slate-200">No open natural events tracked right now</div>
+                      )}
+                      {eventFeed.status === 'ok' && (eventFeed.data || []).length > 0 && (() => {
+                        const events = eventFeed.data || [];
+                        const byCategory = new Map<string, number>();
+                        for (const ev of events) {
+                          byCategory.set(ev.category, (byCategory.get(ev.category) || 0) + 1);
+                        }
+                        const top = [...byCategory.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
+                        const nearest = events.reduce((best, ev) => {
+                          const d = distanceKm(activeCam.lat, activeCam.lng, ev.lat, ev.lng);
+                          return !best || d < best.d ? { ev, d } : best;
+                        }, null as { ev: EonetEvent; d: number } | null);
+                        return (
+                          <>
+                            <div className="text-xs font-bold text-slate-200">
+                              {events.length} open events • {top.map(([c, n]) => `${n} ${c.toLowerCase()}`).join(', ')}
+                            </div>
+                            {nearest && (
+                              <div className="text-[10px] text-orange-300 truncate" title={nearest.ev.title}>
+                                Nearest to {activeCam.city}: {nearest.ev.title} • ~{nearest.d.toLocaleString()} km away
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-900/60 border border-slate-800 p-3 rounded-2xl flex items-start gap-3">
                     <Sun className="w-5 h-5 text-sky-400 shrink-0 mt-0.5" />
-                    <div className="min-w-0">
-                      <div className="text-[10px] font-mono uppercase text-slate-400">Space Weather Solar Flux</div>
-                      <div className="text-xs font-bold text-slate-400">Planned feed — not yet live</div>
-                      <div className="text-[10px] text-slate-500">NOAA SWPC integration in a future update</div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-[10px] font-mono uppercase text-slate-400">Space Weather (NOAA SWPC)</div>
+                        <a
+                          href="https://www.swpc.noaa.gov/products/planetary-k-index"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[9px] font-mono text-emerald-400 hover:text-emerald-300 shrink-0"
+                        >
+                          source ↗
+                        </a>
+                      </div>
+                      {spaceFeed.status === 'loading' && (
+                        <div className="text-xs text-slate-300 font-bold animate-pulse">Reading solar-terrestrial data…</div>
+                      )}
+                      {spaceFeed.status === 'error' && (
+                        <div>
+                          <div className="text-xs font-bold text-rose-400">Live feed unavailable</div>
+                          <button
+                            onClick={() => void spaceFeed.refresh()}
+                            className="mt-1 text-[10px] font-mono text-amber-400 hover:text-amber-300 underline"
+                          >
+                            Retry now
+                          </button>
+                        </div>
+                      )}
+                      {spaceFeed.status === 'ok' && spaceFeed.data && (() => {
+                        const sw = spaceFeed.data;
+                        const barColor = (kp: number) =>
+                          kp >= 7 ? 'bg-rose-400' : kp >= 5 ? 'bg-amber-400' : 'bg-sky-400';
+                        return (
+                          <>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold text-slate-200">Kp {sw.kp !== null ? sw.kp.toFixed(2) : '—'}</span>
+                              <div className="flex items-end gap-0.5 h-4" aria-hidden="true">
+                                {sw.kpTrend.map((kp, i) => (
+                                  <span
+                                    key={i}
+                                    className={`w-1.5 rounded-sm ${barColor(kp)}`}
+                                    style={{ height: `${Math.max(8, (kp / 9) * 100)}%` }}
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                            <div className="text-[10px] text-sky-300 truncate">{sw.summary}</div>
+                            <div className="text-[10px] text-slate-400">
+                              Scales — R{sw.radioBlackoutScale ?? '—'} radio • S{sw.radiationScale ?? '—'} radiation • G{sw.geomagneticScale ?? '—'} geo
+                            </div>
+                          </>
+                        );
+                      })()}
                     </div>
                   </div>
 
@@ -490,68 +591,90 @@ export const WorldMonitorModal: React.FC<WorldMonitorModalProps> = ({
                     <Compass className="w-5 h-5 text-lime-400 shrink-0 mt-0.5" />
                     <div className="min-w-0">
                       <div className="text-[10px] font-mono uppercase text-slate-400">Maritime & Aviation</div>
-                      <div className="text-xs font-bold text-slate-400">Planned feed — not yet live</div>
-                      <div className="text-[10px] text-slate-500">OpenSky / AIS integration in a future update</div>
+                      <div className="text-xs font-bold text-slate-400">Planned feed — blocked in-browser</div>
+                      <div className="text-[10px] text-slate-500">
+                        Live AIS/ADS-B feeds (OpenSky, ADSB.lol) send no cross-origin headers, so they need a server-side proxy first.
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
             ) : (
-              /* 4-Feed Camera Wall */
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {pinnedCamIds.map(id => {
-                  const cam = WORLD_CAMERAS.find(c => c.id === id) || WORLD_CAMERAS[0];
-                  return (
-                    <div
-                      key={id}
-                      className="relative aspect-video rounded-2xl overflow-hidden border border-slate-800 bg-black group"
-                    >
-                      <img
-                        src={feedUrl(cam)}
-                        alt={cam.name}
-                        className="w-full h-full object-cover"
-                        onLoad={() => handleFeedLoad(cam.id)}
-                        onError={() => handleFeedError(cam.id)}
-                      />
-                      {(feedStatus[cam.id] ?? 'loading') === 'loading' && (
-                        <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-950">
-                          <div className="w-6 h-6 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
-                        </div>
-                      )}
-                      {feedStatus[cam.id] === 'error' && (
-                        <button
-                          onClick={() => retryFeed(cam)}
-                          className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-1.5 bg-slate-950/90 text-[11px] font-bold text-rose-300 transition hover:bg-slate-900"
-                          title="Retry this camera feed"
-                        >
-                          <RefreshCw className="w-5 h-5" />
-                          Feed offline — tap to retry
-                        </button>
-                      )}
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex flex-col justify-between p-3">
-                        <div className="flex justify-between items-center">
-                          <span className="text-[10px] font-mono font-bold bg-slate-950/80 text-emerald-400 px-2 py-0.5 rounded border border-slate-800">
-                            {cam.city.toUpperCase()}
-                          </span>
+              /* Pinned Camera Wall (up to 4 user-selected feeds) */
+              <div className="space-y-4">
+                {pinnedCamIds.length === 0 && (
+                  <div className="aspect-video rounded-2xl border border-dashed border-slate-700 bg-slate-900/40 flex flex-col items-center justify-center gap-2 text-center p-6">
+                    <LayoutGrid className="w-8 h-8 text-slate-500" />
+                    <div className="text-sm font-bold text-slate-300">No feeds pinned yet</div>
+                    <div className="text-xs text-slate-500 max-w-sm">
+                      Switch to Single Focus, pick a camera from the directory, and press “Pin to Wall” to build your own camera wall (up to four feeds).
+                    </div>
+                  </div>
+                )}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {pinnedCamIds.map(id => {
+                    const cam = WORLD_CAMERAS.find(c => c.id === id) || WORLD_CAMERAS[0];
+                    return (
+                      <div
+                        key={id}
+                        className="relative aspect-video rounded-2xl overflow-hidden border border-slate-800 bg-black group"
+                      >
+                        <img
+                          src={feedUrl(cam)}
+                          alt={cam.name}
+                          className="w-full h-full object-cover"
+                          onLoad={() => handleFeedLoad(cam.id)}
+                          onError={() => handleFeedError(cam.id)}
+                        />
+                        {(feedStatus[cam.id] ?? 'loading') === 'loading' && (
+                          <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-950">
+                            <div className="w-6 h-6 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
+                          </div>
+                        )}
+                        {feedStatus[cam.id] === 'error' && (
                           <button
-                            onClick={() => {
-                              setActiveCam(cam);
-                              setViewMode('single');
-                            }}
-                            className="p-1 rounded bg-slate-950/80 text-slate-300 hover:text-white"
-                            title="Expand"
+                            onClick={() => retryFeed(cam)}
+                            className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-1.5 bg-slate-950/90 text-[11px] font-bold text-rose-300 transition hover:bg-slate-900"
+                            title="Retry this camera feed"
                           >
-                            <Maximize2 className="w-3.5 h-3.5" />
+                            <RefreshCw className="w-5 h-5" />
+                            Feed offline — tap to retry
                           </button>
-                        </div>
-                        <div>
-                          <div className="text-xs font-bold text-slate-100">{cam.name}</div>
-                          <div className="text-[10px] text-slate-400">{cam.provider}</div>
+                        )}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex flex-col justify-between p-3">
+                          <div className="flex justify-between items-center">
+                            <span className="text-[10px] font-mono font-bold bg-slate-950/80 text-emerald-400 px-2 py-0.5 rounded border border-slate-800">
+                              {cam.city.toUpperCase()}
+                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={() => togglePinCam(cam)}
+                                className="p-1 rounded bg-slate-950/80 text-emerald-300 hover:text-white"
+                                title="Unpin this feed"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setActiveCam(cam);
+                                  setViewMode('single');
+                                }}
+                                className="p-1 rounded bg-slate-950/80 text-slate-300 hover:text-white"
+                                title="Expand"
+                              >
+                                <Maximize2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-xs font-bold text-slate-100">{cam.name}</div>
+                            <div className="text-[10px] text-slate-400">{cam.provider}</div>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>

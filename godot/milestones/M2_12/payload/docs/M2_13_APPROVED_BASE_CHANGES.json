@@ -1,0 +1,10 @@
+{
+  "milestone": "M2.13 Windows radio readiness (development increment)",
+  "changes": {
+    "src/audio/radio_player.gd": {
+      "previous_sha256": "738ed535e6651d580ba700124c613bd971d99d905ac2b69b41b6387ce24dfb83",
+      "m2_13_sha256": "8d5ee736ba4443d77d47fec25122e232b3e32f9e1b8416202d5a183f7e4652de",
+      "reason": "Report an incomplete FFmpeg HTTPS build with actionable Settings guidance; preserve playback, cleanup, TLS verification, and private diagnostic boundaries."
+    }
+  }
+}

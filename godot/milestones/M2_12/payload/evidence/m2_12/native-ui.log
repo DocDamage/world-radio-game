@@ -1,0 +1,6 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+WARNING: Could not set V-Sync mode, as changing V-Sync mode is not supported by the graphics driver.
+     at: set_use_vsync (platform/linuxbsd/x11/gl_manager_x11.cpp:372)
+OpenGL API 4.5 (Core Profile) Mesa 25.0.7-2 - Compatibility - Using Device: Mesa - llvmpipe (LLVM 19.1.7, 256 bits)
+
+NATIVE_EARTH_RESULT {"checks":43,"engine":{"build":"official","hash":"ed1daf0bf001b61586d9930840f2f1394092c079","hex":263938,"major":4,"minor":7,"patch":2,"status":"stable","string":"4.7.2-stable (official)","timestamp":0},"evidence":{"marker_visual_framing":"Camera aimed directly for inspection; movement input is covered by separate coastal suites.","public_radio_audio":"Not tested; selection and discovery only."},"failed":0,"failures":[],"scope":"Integrated host + native runtime; injected input, not physical devices. No radio playback in this smoke run.","screenshots":["M2.12-New-Haven-Stations-1440.png","M2.12-New-Haven-Stations-1100.png","M2.12-Harbor-Waypoint.png","M2.12-Voyage-History.png"]}

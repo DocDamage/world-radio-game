@@ -1,0 +1,287 @@
+{
+  "version": "0.2.10-rc1",
+  "milestone": "M2.10R Coastal Systems",
+  "engine_target": "Godot4.7.2",
+  "engine_used_for_current_validation": {
+    "build": "official",
+    "hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
+    "hex": 263938,
+    "major": 4,
+    "minor": 7,
+    "patch": 2,
+    "status": "stable",
+    "string": "4.7.2-stable (official)",
+    "timestamp": 0
+  },
+  "artifact_type": "Cumulative editable source, Linux native-tested release candidate; separate exported PCK",
+  "source_inputs": [
+    {
+      "filename": "TerraWave_Godot_4.7.2_M2_9_Harbor_Sailing_DEV_Source.zip",
+      "bytes": 390460420,
+      "sha256": "b22f1b1d4387de0cc048ee6b5c262abb9dc4e000101e63d8e51f305386db7975",
+      "prior_m2_10_source_bytes_available": false,
+      "reconstruction_not_reuse_of_historical_claims": true
+    }
+  ],
+  "native_main_scene": "res://scenes/Main.tscn",
+  "default_region_unchanged": true,
+  "resident_chunk_cap": 25,
+  "retained_harbor_data": {
+    "manifest_sha256": "250ff90a1a393df44c2a7a9f363189f0689c8f64eeb266b759b6ad132ec04b4f",
+    "id": "new-haven-harbor-775ab896363d-terrain-ade13fa6e4",
+    "content": {
+      "absence_is_verified_dry_land": false,
+      "buildings": 378,
+      "courtyard_holes": 2,
+      "road_segments": 1128,
+      "water_area_m2": 1382157.86,
+      "water_conflict_buildings_omitted": 4,
+      "water_features": 11,
+      "water_island_holes": 0,
+      "water_level_measured": false,
+      "water_pieces": 38
+    },
+    "anchor": [
+      41.295,
+      -72.912,
+      0
+    ],
+    "bounds_m": [
+      -1000,
+      -1000,
+      1000,
+      1000
+    ],
+    "chunk_size_m": 250,
+    "chunks": 64,
+    "resident_chunk_cap": 25,
+    "water_model": "level_surface_exclusion_v1",
+    "coverage": "selected_tidal_polygons",
+    "water_level": {
+      "method": "DEM interior median, 30 m inset; visual estimate, not tide-gauge measurement",
+      "reference": "NAVD88",
+      "render_lift_m": 0.03,
+      "sample_count": 4593,
+      "sample_quantiles_m": [
+        -1.3716,
+        -1.3716,
+        -1.3716,
+        -1.3716,
+        -1.3716
+      ],
+      "tides_simulated": false,
+      "value_m": -1.3716,
+      "vertical_reference_basis": "Same recipe-declared reference as DEM; no vertical conversion",
+      "water_level_measured": false
+    },
+    "spawn": [
+      -544.6371,
+      0,
+      237.7017
+    ],
+    "spawn_yaw_rad": -2.168651,
+    "spawn_pitch_rad": -0.12,
+    "terrain": {
+      "grid_spacing_m": 15.625,
+      "max_elevation_m": 23.772046296098303,
+      "min_elevation_m": -1.3716026544570927,
+      "raster_size": [
+        320,
+        320
+      ],
+      "sample_count": 16641
+    },
+    "source_receipt": {
+      "delivery": "user-supplied local uploads",
+      "http_download_verified": false,
+      "osm_base_timestamp": "2026-09-11T17:05:51Z",
+      "schema_version": 1,
+      "sha256": {
+        "elevation.tif": "02cfeb7bb4359c5c6a21f55dc77cf1c1cb6222ff6a0edb1ed932ececf551cafb",
+        "hydrography.zip": "f7c4b21b08a6f27f484cec730bb089f79d38111ec1a5e5b932f80beadaccbe35",
+        "osm.json": "775ab896363dabaf793823af0efc5e4ac8e1cbf5ee8e0c93ba9b0f90582fbf1d",
+        "query.overpassql": "fbe9bd3e1dc761ceabd45cbd3172946f7b952f574eab50161c1f6b46cb2fa769",
+        "source_declaration.json": "127cc1ced641c57d444e8e01b721a84c9485a2283b363da485d42ac242311e7b"
+      },
+      "source_date_is_not_survey_date": true,
+      "vertical_crs_in_tiff": false
+    },
+    "geographic_accuracy_certified": false,
+    "note": "Historical input descriptor kept unchanged; coastal overlay separately supplies modeled tide and depth. Historical tides_simulated:false describes input, not current overlay."
+  },
+  "coastal_overlay": {
+    "water_and_bathy": "Modeled tide/waves/bathymetry layered on unchanged geographic footprint",
+    "manifest_bound": true,
+    "placements": 13,
+    "original_models_preserved": 11
+  },
+  "validation_summary": {
+    "milestone": "M2.10R Coastal Systems",
+    "version": "0.2.10-rc1",
+    "date_utc": "2026-09-12T02:29:42.305471+00:00",
+    "status": "NATIVE_LINUX_AND_EXPORTED_PCK_PASSED; WINDOWS_TARGET_ACCEPTANCE_NOT_RUN",
+    "source_basis": {
+      "filename": "TerraWave_Godot_4.7.2_M2_9_Harbor_Sailing_DEV_Source.zip",
+      "bytes": 390460420,
+      "sha256": "b22f1b1d4387de0cc048ee6b5c262abb9dc4e000101e63d8e51f305386db7975",
+      "prior_m2_10_source_bytes_available": false,
+      "reconstruction_not_reuse_of_historical_claims": true
+    },
+    "engine": {
+      "build": "official",
+      "hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
+      "hex": 263938,
+      "major": 4,
+      "minor": 7,
+      "patch": 2,
+      "status": "stable",
+      "string": "4.7.2-stable (official)",
+      "timestamp": 0
+    },
+    "platform": {
+      "os": "Linux",
+      "rendering": "Xvfb / Mesa llvmpipe / OpenGL Compatibility",
+      "audio_driver": "Dummy",
+      "audio_scope": "Owned local FFmpeg streams, decoded PCM and state continuity; not human-heard output",
+      "input_scope": "Native injected keyboard/pointer events; not physical controller hardware"
+    },
+    "tests": {
+      "python": {
+        "status": "PASS",
+        "methods": 175,
+        "failed": 0,
+        "new_coastal_methods": 25,
+        "log": "evidence/m2_10r/clean_cache/python.log"
+      },
+      "clean_cache_import": {
+        "status": "PASS",
+        "previous_cache_copied": false,
+        "embedded_model_texture_intermediates_regenerated": true,
+        "log": "evidence/m2_10r/clean_cache/import.log"
+      },
+      "final_full_native": {
+        "status": "PASS",
+        "checks": 625,
+        "failed": 0,
+        "includes_coastal_checks": 104,
+        "report": "evidence/m2_10r/clean_cache/full_final/native-earth-tests.json",
+        "after_seabed_winding_fix": true
+      },
+      "clean_cache_coastal_route": {
+        "status": "PASS",
+        "checks": 104,
+        "failed": 0,
+        "report": "evidence/m2_10r/clean_cache/marine/native-earth-tests.json",
+        "scope": "Independent route prior to supplemental bed collision winding fix; final full and edge tests supersede collision acceptance"
+      },
+      "supplemental_native_route": {
+        "status": "PASS",
+        "checks": 37,
+        "failed": 0,
+        "report": "evidence/m2_10r/clean_cache/edge_routes_final/native-earth-tests.json",
+        "coverage": "Upward native seabed ray/depth/normal, stopped boat water entry, swim back aboard, return ashore support, all18 compressed textures"
+      },
+      "core_native": {
+        "status": "PASS",
+        "checks": 552,
+        "failed": 0,
+        "log": "evidence/m2_10r/core_final.log"
+      },
+      "harbor_native_geometry": {
+        "status": "PASS",
+        "checks": 82,
+        "failed": 0,
+        "log": "evidence/m2_10r/harbor_final.log"
+      },
+      "physical_buoyancy": {
+        "status": "PASS",
+        "rates_hz": [
+          30,
+          60,
+          120
+        ],
+        "checks_per_rate": 24,
+        "total_checks": 72,
+        "failed": 0,
+        "reports": [
+          "evidence/m2_10r/physics_30.json",
+          "evidence/m2_10r/physics_60.json",
+          "evidence/m2_10r/physics_120.json"
+        ],
+        "scope": "Actual RigidBody3D displacement/damping/restoration,320/480kg draft, rough water and rebase"
+      },
+      "exported_pck": {
+        "status": "PASS",
+        "checks": 147,
+        "failed": 0,
+        "source_cache_available_to_runtime": false,
+        "report": "evidence/m2_10r/clean_cache/pack_final/pack-tests.json",
+        "log": "evidence/m2_10r/clean_cache/pack_final/pack-tests.log",
+        "pack": {
+          "path": "TerraWave_Native_M2_10R_Coastal.pck",
+          "bytes": 475414848,
+          "sha256": "5eb60bbe5911f5385d74f861dc2f9d5723b2d3d9366806c6099ff099267ead71"
+        }
+      },
+      "native_visual_review": {
+        "status": "PASS_WITH_RETAINED_SOURCE_ART_LIMITATIONS",
+        "screenshots": "evidence/m2_10r/overview and evidence/m2_10r/clean_cache/full_final",
+        "scope": "Actual software-rendered application, not generated concept images; no Windows/GPU FPS claim"
+      },
+      "windows_prerequisites": {
+        "status": "blocked",
+        "error": "Matching Windows x64 export templates are not installed. In Godot use Editor > Manage Export Templates. Required version: 4.7.2.stable. Checked: /mnt/data/bin/editor_data/export_templates/4.7.2.stable, /home/oai/.local/share/godot/export_templates/4.7.2.stable",
+        "windows_execution_tested": false
+      }
+    },
+    "counts_overlap": true,
+    "asset_optimization": {
+      "placements": 13,
+      "static_asset_families_including_skiff": 14,
+      "resident_dock_observation": {
+        "items": 13,
+        "triangles": 1066438,
+        "material_surfaces": 22
+      },
+      "texture_images": 18,
+      "texture_pixel_payload_before_bytes": 293601264,
+      "texture_pixel_payload_after_bytes": 48933792,
+      "texture_scope": "Native compressed pixel buffers including mipmaps, not total measured VRAM allocation",
+      "receipt": "addons/terrawave_marine/optimized/receipt.json",
+      "texture_receipt": "addons/terrawave_marine/optimized/texture_receipt.json"
+    },
+    "preservation": {
+      "original_model_files_byte_identical": 11,
+      "historical_m2_8_protected_total": 1867,
+      "byte_identical_protected_files": 1861,
+      "explicitly_approved_changed_protected_files": 6,
+      "approved_changes": "docs/M2_10R_APPROVED_BASE_CHANGES.json",
+      "geographic_manifest_byte_identical": true,
+      "geographic_manifest_sha256": "250ff90a1a393df44c2a7a9f363189f0689c8f64eeb266b759b6ad132ec04b4f",
+      "remote_writes": false
+    },
+    "known_limits": [
+      "Modeled bathymetry, not surveyed seabed; no survey importer included",
+      "Simulated harmonic tides, not live predictions; fixed shoreline/no inundation",
+      "Authored asset locations, not surveyed real-object placement",
+      "Skiff physically driven; carrier and Swift tide-following exhibits",
+      "Functional first-person transfers, not visible humanoid boarding animations",
+      "Source scan holes/fragments/texture defects are retained, not reconstructed",
+      "Linux software rendering does not establish Windows/RTX3060 performance",
+      "Physical gamepad, audible speakers and prolonged target-device soak not tested",
+      "No WindowsEXE or engine/FFmpeg/export-template/font binaries included"
+    ],
+    "diagnostic_history": {
+      "retained_failed_runs": true,
+      "seabed_winding": "Initial clean-cache ray failed; corrected mesh winding and reran supplemental,full and exported-pack checks; old failure preserved",
+      "dock_rebase": "Fixed one-motion-step broadphase synchronization on walker rebase",
+      "bank_fixture": "Unbridged-bank fixture moved away from intentionally new walkable dock; native exclusion assertions retained"
+    },
+    "current_handoff": "docs/M2_10R_HANDOFF.md",
+    "evidence_index": "evidence/m2_10r/README.md",
+    "package_integrity": "See separate Package_Receipt.json after ZIP verification; SOURCE_MANIFEST.json inventories every delivered file except itself"
+  },
+  "current_handoff": "docs/M2_10R_HANDOFF.md",
+  "historical_build_info": "docs/M2_9_BUILD_INFO.json",
+  "no_remote_writes": true
+}

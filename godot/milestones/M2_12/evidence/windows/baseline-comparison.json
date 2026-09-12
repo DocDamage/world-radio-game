@@ -1,0 +1,22 @@
+{
+  "checked_utc": "2026-09-12T22:44:03.443885+00:00",
+  "baseline_file_count": 2345,
+  "changed_baseline_files": [
+    {
+      "path": "src/audio/radio_player.gd",
+      "previous_sha256": "738ed535e6651d580ba700124c613bd971d99d905ac2b69b41b6387ce24dfb83",
+      "current_sha256": "8d5ee736ba4443d77d47fec25122e232b3e32f9e1b8416202d5a183f7e4652de"
+    },
+    {
+      "path": "tests/test_marine_tools.py",
+      "previous_sha256": "c32b8c02901a82da169559d8612281c23a7897b2d053b5ee90e746a27d2e5038",
+      "current_sha256": "724c321ea00f0b923c3ccb21cd984a95119bc4b9ae00952e34372803e13deaa7"
+    },
+    {
+      "path": "tools/build_coastal_data.py",
+      "previous_sha256": "081568f23724f2eadffe2f3f4319b4540597f0e31ba95715dd20847b0a4b1dea",
+      "current_sha256": "072296839f32809b951ca8d1631f6b4d70dc17defc4765eff4bd952f19320c93"
+    }
+  ],
+  "missing_baseline_files": []
+}

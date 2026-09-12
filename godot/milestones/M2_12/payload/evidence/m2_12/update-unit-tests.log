@@ -1,0 +1,20 @@
+test_case_collision (test_update.UpdateTests.test_case_collision) ... ok
+test_corrupt_payload (test_update.UpdateTests.test_corrupt_payload) ... ok
+test_existing_output_unchanged (test_update.UpdateTests.test_existing_output_unchanged) ... ok
+test_extra_source_files_untouched_not_copied (test_update.UpdateTests.test_extra_source_files_untouched_not_copied) ... ok
+test_missing_base (test_update.UpdateTests.test_missing_base) ... ok
+test_missing_payload (test_update.UpdateTests.test_missing_payload) ... ok
+test_modified_base (test_update.UpdateTests.test_modified_base) ... ok
+test_new_path_collision (test_update.UpdateTests.test_new_path_collision) ... ok
+test_output_inside_base (test_update.UpdateTests.test_output_inside_base) ... ok
+test_output_inventory_tamper (test_update.UpdateTests.test_output_inventory_tamper) ... ok
+test_path_traversal (test_update.UpdateTests.test_path_traversal) ... ok
+test_success_and_base_unchanged (test_update.UpdateTests.test_success_and_base_unchanged) ... ok
+test_symlink_base (test_update.UpdateTests.test_symlink_base) ... ok
+test_symlink_payload (test_update.UpdateTests.test_symlink_payload) ... ok
+test_windows_path (test_update.UpdateTests.test_windows_path) ... ok
+
+----------------------------------------------------------------------
+Ran 15 tests in 0.035s
+
+OK

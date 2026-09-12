@@ -1,0 +1,58 @@
+{
+  "regional": {
+    "exit": 0,
+    "engine_errors": false
+  },
+  "voyage": {
+    "exit": 0,
+    "engine_errors": false
+  },
+  "navigation_legacy": {
+    "exit": 0,
+    "engine_errors": false
+  },
+  "restart_seed": {
+    "exit": 0,
+    "engine_errors": false
+  },
+  "restart_verify": {
+    "exit": 0,
+    "engine_errors": false
+  },
+  "coastal_tools": {
+    "exit": 0,
+    "engine_errors": false
+  },
+  "marine_tools": {
+    "exit": 0,
+    "engine_errors": false
+  },
+  "coastal_physics_30": {
+    "exit": 0,
+    "engine_errors": false
+  },
+  "coastal_physics_60": {
+    "exit": 0,
+    "engine_errors": false
+  },
+  "coastal_physics_120": {
+    "exit": 0,
+    "engine_errors": false
+  },
+  "coastal_smoke": {
+    "exit": 0,
+    "engine_errors": false
+  },
+  "coastal_edge_routes": {
+    "exit": 0,
+    "engine_errors": false
+  },
+  "m212_native_final": {
+    "exit": 0,
+    "engine_errors": false
+  },
+  "ui_final": {
+    "exit": 0,
+    "engine_errors": false
+  }
+}

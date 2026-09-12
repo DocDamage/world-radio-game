@@ -1,0 +1,46 @@
+{
+  "checks": 49,
+  "engine": {
+    "build": "official",
+    "hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
+    "hex": 263938,
+    "major": 4,
+    "minor": 7,
+    "patch": 2,
+    "status": "stable",
+    "string": "4.7.2-stable (official)",
+    "timestamp": 0
+  },
+  "evidence": {
+    "new_haven": {
+      "content": {
+        "absence_is_verified_dry_land": false,
+        "buildings": 2096.0,
+        "courtyard_holes": 23.0,
+        "height_inferences": 2085.0,
+        "input_elements": 7007.0,
+        "road_segments": 4465.0,
+        "water_features": 0.0,
+        "water_pieces": 0.0
+      },
+      "decoder_pid": 24972,
+      "geographic_accuracy_certified": false,
+      "landing_adjusted": false,
+      "origin_shifts": 4,
+      "pcm_frames_advanced": 473472,
+      "renderer": "Intel(R) Iris(R) Xe Graphics",
+      "walk_distance_m": 8.08605670928955,
+      "water_coverage": "unknown"
+    }
+  },
+  "failed": 0,
+  "failures": [],
+  "scope": "Integrated host + native runtime; injected input, not physical devices. Owned loopback FFmpeg broadcasts.",
+  "screenshots": [
+    "M2.7-New-Haven-Ground.png",
+    "M2.7-New-Haven-Overview.png",
+    "M2.7-New-Haven-Courtyard.png"
+  ],
+  "unexpected_engine_errors": false,
+  "returncode": 0
+}

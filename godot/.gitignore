@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.godot/
+.tools/
+exports/
+
+# These inherited logs are part of the hash-verified milestone payload.
+!milestones/M2_12/payload/evidence/**/*.log

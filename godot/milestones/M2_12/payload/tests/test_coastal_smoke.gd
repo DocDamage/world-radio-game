@@ -1,0 +1,68 @@
+extends "res://tests/integration/native_test_support.gd"
+func _run() -> void:
+	output = "res://evidence/m2_10r/smoke"
+	var override := OS.get_environment("TERRAWAVE_QA_OUTPUT")
+	if not override.is_empty(): output = override
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(output))
+	scene = load("res://scenes/Main.tscn").instantiate()
+	root.add_child(scene)
+	root.size = Vector2i(1100,720)
+	await ticks(10)
+	earth = scene.earth
+	radio = root.get_node("RadioPlayer")
+	app = root.get_node("AppState")
+	earth.session.message.connect(func(text): print("COAST_NOTICE ", text))
+	earth.session.state_changed.connect(func(text): print("COAST_STATE ", text))
+	earth.load_manifest("res://data/new_haven_harbor/manifest.json")
+	earth.locate_region()
+	earth.session.transition_seconds = 0.08
+	check(earth.descend(),"Start native harbor")
+	check(await wait_for(func(): return earth.session.state == "WALKING",35),"Land harbor")
+	await ticks(40)
+	var s: Node3D = earth.session
+	var v: Node = s.marine
+	check(v.coastal != null,"Coastal world configured")
+	if v.coastal == null:
+		await finish()
+		return
+	print("COAST_DATA ",v.coastal.layout.keys()," valid ",v.coastal.valid," items ",v.coastal.population.active.size()," dock ",v.coastal.dock.land_height," water ",v.coastal.dock.surface)
+	print("SPAWN ",s.region_position()," yaw ",s.walker.yaw," boat ",v.boat.active," berth ",v.coastal.dock.berth())
+	print("BERTH_VALID ",v.navigation.allows(v.coastal.dock.berth(),v.coastal.dock.berth())," depth ",v.coastal.environment.depth_at(v.coastal.dock.berth().x,v.coastal.dock.berth().z))
+	check(v.boat.active,"Skiff afloat beside dock")
+	earth.layout.set_expanded(true)
+	earth.input_router.capture_controls()
+	await hold_key(KEY_W,true)
+	check(await wait_for(func(): return v.coastal.dock.board_distance(s.walker.global_position) < 2.0,12), "Reach boarding point under keyboard input")
+	print("WALK ",s.region_position()," onfloor ",s.walker.is_on_floor()," dock ",v.supports_walker())
+	await hold_key(KEY_W,false)
+	earth.input_router.release_controls()
+	await ticks(5)
+	check(v.supports_walker(),"Actual keyboard walking reaches floating dock")
+	print("BOARD_DISTANCE ",v.coastal.dock.board_distance(s.walker.global_position))
+	await key(KEY_V)
+	check(await wait_for(func(): return s.state == "SAILING",4),"Board by key")
+	await ticks(30)
+	print("AFLOAT ",s.state," boat ",s.frame.local_to_region(v.boat.position)," rollpitch ",v.boat.rotation," vel ",v.boat.linear_velocity)
+	if DisplayServer.get_name() != "headless": await capture("Coastal-Dock.png")
+	if s.state == "SAILING":
+		await key(KEY_V)
+		await ticks(5)
+		check(not v.boat.moored,"Release lines")
+		earth.input_router.capture_controls()
+		await hold_key(KEY_W,true)
+		await ticks(30)
+		await hold_key(KEY_W,false)
+		earth.input_router.release_controls()
+		print("SAILED ",s.region_position()," status ",v.boat.status)
+		await key(KEY_G)
+		check(await wait_for(func(): return s.state == "SWIMMING",5),"Enter water from stopped skiff")
+		await ticks(10)
+		if s.state == "SWIMMING":
+			earth.input_router.capture_controls()
+			await hold_key(KEY_CTRL,true)
+			await ticks(20)
+			await hold_key(KEY_CTRL,false)
+			print("DIVE ",s.region_position()," underwater ",v.swimmer.underwater," air ",v.swimmer.oxygen)
+			check(v.swimmer.underwater,"Submerged camera/oxygen")
+			if DisplayServer.get_name() != "headless": await capture("Coastal-Underwater.png")
+	await finish()

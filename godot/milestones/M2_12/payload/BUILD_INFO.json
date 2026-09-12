@@ -1,0 +1,122 @@
+{
+  "version": "0.2.12-dev",
+  "milestone": "M2.12 Regional Radio & Voyages",
+  "engine_target": "Godot 4.7.2",
+  "engine_used": "4.7.2.stable.official.ed1daf0bf",
+  "artifact_type": "Cumulative editable DEVELOPMENT SOURCE; no new PCK/EXE",
+  "source_inputs": [
+    {
+      "filename": "TerraWave_Godot_4.7.2_M2_9_Harbor_Sailing_DEV_Source.zip",
+      "bytes": 390460420,
+      "sha256": "b22f1b1d4387de0cc048ee6b5c262abb9dc4e000101e63d8e51f305386db7975",
+      "prior_m2_10_source_bytes_available": false,
+      "reconstruction_not_reuse_of_historical_claims": true
+    }
+  ],
+  "base_version": "0.2.11-dev",
+  "base_verified_files": 2308,
+  "base_manifest_sha256": "f16e52625243911326973270cde7473071b778d09d3b9eff8bc64d1387dd1c74",
+  "validation": "docs/M2_12_VALIDATION.json",
+  "regional_stations": {
+    "added": 12,
+    "bundled_total": 20,
+    "city_beacons": 15,
+    "direct_publisher_links": 3,
+    "website_only": 9,
+    "coordinates": "approximate city centers, not coverage"
+  },
+  "github_write_performed": false,
+  "historical_build_information": "docs/history/M2_10R_BUILD_INFO.json",
+  "not_certified": [
+    "Live public station playback",
+    "Public directory end-to-end lookup",
+    "Physical audio",
+    "Physical gamepad",
+    "Windows executable",
+    "RTX 3060 performance",
+    "Full web-game parity"
+  ],
+  "retained_harbor_data": {
+    "manifest_sha256": "250ff90a1a393df44c2a7a9f363189f0689c8f64eeb266b759b6ad132ec04b4f",
+    "id": "new-haven-harbor-775ab896363d-terrain-ade13fa6e4",
+    "content": {
+      "absence_is_verified_dry_land": false,
+      "buildings": 378,
+      "courtyard_holes": 2,
+      "road_segments": 1128,
+      "water_area_m2": 1382157.86,
+      "water_conflict_buildings_omitted": 4,
+      "water_features": 11,
+      "water_island_holes": 0,
+      "water_level_measured": false,
+      "water_pieces": 38
+    },
+    "anchor": [
+      41.295,
+      -72.912,
+      0
+    ],
+    "bounds_m": [
+      -1000,
+      -1000,
+      1000,
+      1000
+    ],
+    "chunk_size_m": 250,
+    "chunks": 64,
+    "resident_chunk_cap": 25,
+    "water_model": "level_surface_exclusion_v1",
+    "coverage": "selected_tidal_polygons",
+    "water_level": {
+      "method": "DEM interior median, 30 m inset; visual estimate, not tide-gauge measurement",
+      "reference": "NAVD88",
+      "render_lift_m": 0.03,
+      "sample_count": 4593,
+      "sample_quantiles_m": [
+        -1.3716,
+        -1.3716,
+        -1.3716,
+        -1.3716,
+        -1.3716
+      ],
+      "tides_simulated": false,
+      "value_m": -1.3716,
+      "vertical_reference_basis": "Same recipe-declared reference as DEM; no vertical conversion",
+      "water_level_measured": false
+    },
+    "spawn": [
+      -544.6371,
+      0,
+      237.7017
+    ],
+    "spawn_yaw_rad": -2.168651,
+    "spawn_pitch_rad": -0.12,
+    "terrain": {
+      "grid_spacing_m": 15.625,
+      "max_elevation_m": 23.772046296098303,
+      "min_elevation_m": -1.3716026544570927,
+      "raster_size": [
+        320,
+        320
+      ],
+      "sample_count": 16641
+    },
+    "source_receipt": {
+      "delivery": "user-supplied local uploads",
+      "http_download_verified": false,
+      "osm_base_timestamp": "2026-09-11T17:05:51Z",
+      "schema_version": 1,
+      "sha256": {
+        "elevation.tif": "02cfeb7bb4359c5c6a21f55dc77cf1c1cb6222ff6a0edb1ed932ececf551cafb",
+        "hydrography.zip": "f7c4b21b08a6f27f484cec730bb089f79d38111ec1a5e5b932f80beadaccbe35",
+        "osm.json": "775ab896363dabaf793823af0efc5e4ac8e1cbf5ee8e0c93ba9b0f90582fbf1d",
+        "query.overpassql": "fbe9bd3e1dc761ceabd45cbd3172946f7b952f574eab50161c1f6b46cb2fa769",
+        "source_declaration.json": "127cc1ced641c57d444e8e01b721a84c9485a2283b363da485d42ac242311e7b"
+      },
+      "source_date_is_not_survey_date": true,
+      "vertical_crs_in_tiff": false
+    },
+    "geographic_accuracy_certified": false,
+    "note": "Historical input descriptor kept unchanged; coastal overlay separately supplies modeled tide and depth. Historical tides_simulated:false describes input, not current overlay."
+  }
+}

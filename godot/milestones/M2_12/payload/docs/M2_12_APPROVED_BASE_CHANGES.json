@@ -1,0 +1,67 @@
+{
+  "schema": 1,
+  "from_version": "0.2.11-dev",
+  "to_version": "0.2.12-dev",
+  "changes": {
+    "src/audio/radio_player.gd": {
+      "previous_sha256": "dcae19163edf3f9a903bbe52d9057b067adadf1cc2b06f8c8295badac3b9c8d9",
+      "m2_12_sha256": "738ed535e6651d580ba700124c613bd971d99d905ac2b69b41b6387ce24dfb83",
+      "reason": "Website-only discovery records never reach native decoder or stop an existing stream."
+    },
+    "src/core/catalog_codec.gd": {
+      "previous_sha256": "7d9be89f7401ee7320f5b58282cad1776a5d11626c8eea3563d505953c4bba89",
+      "m2_12_sha256": "11a5a8f535e2a48fb22fe9a4fbff64274c4d7312ab23f6c31b5f114a362e79df",
+      "reason": "Explicit website availability and regional metadata validation."
+    },
+    "src/core/geo_math.gd": {
+      "previous_sha256": "d770e025aaafe798c139a25f8218f06c59043eb1836ec5fbfcc36c8e7332f5ff",
+      "m2_12_sha256": "04a324f3820d6e745d42283869040a4f78308e1114c54208da3a1556f43b102b",
+      "reason": "Haversine distances retain neighborhood-scale precision."
+    },
+    "src/core/save_store.gd": {
+      "previous_sha256": "bd43f9e50649e196b55d1b697fb6e6a386186e9237f0d4950a8b599508a03ffc",
+      "m2_12_sha256": "905f9755f9f983c23cb7da7cc75cbdb4a180a4f38aa6a035e550763d6906d5d1",
+      "reason": "Bounded optional voyage and regional-stream profile extensions."
+    },
+    "src/core/station_catalog.gd": {
+      "previous_sha256": "b90f413d595d0af83db7c7a6d3da9af6475b8280b86f38a7fe868611176d3ff6",
+      "m2_12_sha256": "f91e4800ffe4dc31116be812311cbf4a0360e07226eaa29edc101cba01eb0c23",
+      "reason": "Additive bundled regional coverage and persistent stream candidates."
+    },
+    "src/ui/main.gd": {
+      "previous_sha256": "c31fe9559ad98c46e616eb4b587e30460080688dd465ea0115f9b54d33831ceb",
+      "m2_12_sha256": "58fc4b85a9e0b7c60f494289d512bb812af3619dfc3092987b5e061982c72001",
+      "reason": "Native region discovery, website action and host-owned voyage persistence."
+    },
+    "src/ui/station_browser.gd": {
+      "previous_sha256": "715cf03295372f4dcc43eda8799e6bcd4364be48f1345d0343e9365dab6f9b9f",
+      "m2_12_sha256": "7e9db347f47450332b4bfb6da363fcddc4ef5a7063190983413d5c901cb2730e",
+      "reason": "Nearby discovery, stable deferred focus and compact desktop controls."
+    },
+    "src/ui/station_inspector.gd": {
+      "previous_sha256": "06b6b27eeb8a70314cb9abb380a13325f23b0a909ab0c81c976feeaaf2b18299",
+      "m2_12_sha256": "112e6d6dadcae80ad146cd74aaca7c8d69110dd6e0e84dc8ae69f3581053786c",
+      "reason": "Truthful native-stream versus official website-player availability."
+    },
+    "src/world/globe.gd": {
+      "previous_sha256": "006da778a6a6b34a825f28be491c1fb96ab51434c954a3cd3ba3a9ec780e2b9e",
+      "m2_12_sha256": "52f9ed4f8044ac27af2abfe810079ef30a410b352103e8d583e81cb689eeb214",
+      "reason": "Picking a shared city highlight preserves selected station identity."
+    },
+    "tests/test_import.gd": {
+      "previous_sha256": "3f414c49e0a01a6a9ae24a9abd0b2725c09d17190f88187db70e6da6fb34a3e1",
+      "m2_12_sha256": "ba0c9601b69d728141c8f5543b68af473f676975bcbb2bdd97dbc27a089508d1",
+      "reason": "Import totals include twelve additive regional rows without removing scale assertions."
+    },
+    "tests/test_ui.gd": {
+      "previous_sha256": "98d7a7b18667a2e80523d2efb1101a7c8f5af502c95e71b3ba11f5d2fa8dd263",
+      "m2_12_sha256": "5668320f495efeede2357fd89017ba6379d763ef9ecd668f83de1602aea8910b",
+      "reason": "Beacon total reflects seven additional municipalities; original interaction checks retained."
+    },
+    "tests/test_terrain.gd": {
+      "previous_sha256": "fe8e9c25018c085750aceab7860303030a76a20e6de43cbbb64cf886c100526f",
+      "m2_12_sha256": "fbd2f05ebc9a2a210a60e35a56fb73912fec51211d6d181f34ba85eedfe6e3da",
+      "reason": "Validation no longer overwrites immutable archived evidence in source tree."
+    }
+  }
+}

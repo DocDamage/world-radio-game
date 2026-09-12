@@ -1,0 +1,4 @@
+# The source updater verifies exact bytes, including line endings.
+godot/milestones/M2_12/payload/** -text
+# Windows evidence and payload files may intentionally contain CRLF endings.
+godot/milestones/M2_12/** whitespace=trailing-space,space-before-tab,cr-at-eol

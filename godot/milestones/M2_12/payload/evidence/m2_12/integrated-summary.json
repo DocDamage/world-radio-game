@@ -1,0 +1,41 @@
+{
+  "build": "0.2.8",
+  "godot": "4.7.2.stable.official.ed1daf0bf",
+  "automated_checks": 2351,
+  "python_pipeline_cases": 128,
+  "failed": 0,
+  "suites": {
+    "m1_regression": 406,
+    "m2_runtime": 552,
+    "region_validation": 30,
+    "native_host_radio": 625,
+    "terrain_runtime": 156,
+    "terrain_input_validation": 61,
+    "async_preflight": 92,
+    "region_library": 112,
+    "restart_persistence": 24,
+    "courtyard_geometry": 105,
+    "water_geometry": 106,
+    "harbor_geometry": 82
+  },
+  "python_suites": {
+    "original_pipeline": 10,
+    "elevation_http": 20,
+    "region_jobs": 15,
+    "courtyard_compiler": 20,
+    "water_compiler": 22,
+    "windows_packaging_contract": 12,
+    "new_haven_uploads": 13,
+    "harbor_uploads": 16
+  },
+  "cesium_gate": "BLOCKED_DEPENDENCY_NOT_INSTALLED",
+  "not_certified": [
+    "real-world geographic/elevation content",
+    "public internet stations",
+    "physical audio output",
+    "physical gamepad",
+    "Windows executable",
+    "RTX 3060 performance",
+    "full web-game parity"
+  ]
+}

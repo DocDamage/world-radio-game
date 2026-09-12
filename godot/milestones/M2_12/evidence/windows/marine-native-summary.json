@@ -1,0 +1,40 @@
+{
+  "checks": 104,
+  "engine": {
+    "build": "official",
+    "hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
+    "hex": 263938,
+    "major": 4,
+    "minor": 7,
+    "patch": 2,
+    "status": "stable",
+    "string": "4.7.2-stable (official)",
+    "timestamp": 0
+  },
+  "evidence": {
+    "coastal_round_trip": {
+      "bathy_and_tide": "modeled, not surveyed/live",
+      "native_keyboard_and_pointer": true,
+      "physical_gamepad": false,
+      "physics": "force-driven six-probe skiff",
+      "returned": "(-526.8672, -2.374716, 248.472)",
+      "start": "(-529.1452, -2.629447, 251.8241)"
+    },
+    "resident_coast": {
+      "bed_tiles": 10,
+      "items": 13,
+      "surfaces": 22,
+      "triangles": 1066438
+    }
+  },
+  "failed": 0,
+  "failures": [],
+  "scope": "Integrated host + native runtime; injected input, not physical devices. Owned loopback FFmpeg broadcasts.",
+  "screenshots": [
+    "M2.10R-Visitor-Dock.png",
+    "M2.10R-Moored-Skiff.png",
+    "M2.10R-Underwater-Ladder.png"
+  ],
+  "unexpected_engine_errors": false,
+  "returncode": 0
+}

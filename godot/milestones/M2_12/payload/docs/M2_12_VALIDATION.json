@@ -1,0 +1,120 @@
+{
+  "version": "0.2.12-dev",
+  "milestone": "M2.12 Regional Radio & Voyages",
+  "date_utc": "2026-09-12",
+  "engine": "4.7.2.stable.official.ed1daf0bf",
+  "platform": "Linux x86_64; Xvfb; Mesa llvmpipe; Dummy audio",
+  "status": "DEVELOPMENT_SOURCE_TESTED_NOT_TARGET_DEVICE_CERTIFIED",
+  "integrated_regression": {
+    "passed_checks": 2351,
+    "failed": 0,
+    "python_cases": 128,
+    "legacy_runner_build_label": "0.2.8",
+    "actual_project_version": "0.2.12-dev",
+    "suite_breakdown": {
+      "m1_regression": 406,
+      "m2_runtime": 552,
+      "region_validation": 30,
+      "native_host_radio": 625,
+      "terrain_runtime": 156,
+      "terrain_input_validation": 61,
+      "async_preflight": 92,
+      "region_library": 112,
+      "restart_persistence": 24,
+      "courtyard_geometry": 105,
+      "water_geometry": 106,
+      "harbor_geometry": 82
+    },
+    "python_suite_breakdown": {
+      "original_pipeline": 10,
+      "elevation_http": 20,
+      "region_jobs": 15,
+      "courtyard_compiler": 20,
+      "water_compiler": 22,
+      "windows_packaging_contract": 12,
+      "new_haven_uploads": 13,
+      "harbor_uploads": 16
+    }
+  },
+  "new_feature_regression": {
+    "passed_checks": 143,
+    "failed": 0,
+    "regional_radio": 57,
+    "navigation_and_journal": 32,
+    "restart_seed": 1,
+    "fresh_process_restart": 10,
+    "native_rendered_ui_and_marker": 43,
+    "script": "tools/validate_radio_voyages.py"
+  },
+  "additional_regression": {
+    "legacy_navigation": 11,
+    "coastal_physics": {
+      "30": 24,
+      "60": 24,
+      "120": 24
+    },
+    "coastal_smoke": 12,
+    "coastal_edge_routes": 37,
+    "repeat_original_ui": 46,
+    "python_coastal_cases": 25,
+    "python_marine_geometry_source_asset_cases": 22,
+    "updater_unit_cases": 15,
+    "failed": 0,
+    "note": "Separate reruns; repeated suites are not added to a unique-total claim."
+  },
+  "radio_scope": {
+    "bundled_added": 12,
+    "bundled_total": 20,
+    "near_new_haven_50_km": 12,
+    "city_beacons": 15,
+    "publisher_linked_native_urls": 3,
+    "website_only_rows": 9,
+    "metadata_available_offline": true,
+    "optional_online_refresh": "explicit user action only; parsing/cancel/persistence tested, public endpoint transport unverified",
+    "real_audio_test": "owned loopback FFmpeg decode/PCM continuity; not public broadcast or human-heard output",
+    "live_public_stations_tested": false
+  },
+  "source_protection": {
+    "m211_baseline_files": 2308,
+    "previous_protected_sources_explicitly_changed": 12,
+    "m210r_previous_explicit_changes": 6,
+    "other_protected_files": "hash checks passed",
+    "supplied_marine_model_hashes": "11 of 11 unchanged",
+    "missing_autoloads_or_sources": false
+  },
+  "visual_review": {
+    "actual_screenshots": [
+      "M2.12-New-Haven-Stations-1440.png",
+      "M2.12-New-Haven-Stations-1100.png",
+      "M2.12-Harbor-Waypoint.png",
+      "M2.12-Voyage-History.png"
+    ],
+    "window_sizes": [
+      "1440x900",
+      "1100x720"
+    ],
+    "reviewed": true,
+    "marker_capture": "Camera aimed for inspection; separate suites inject movement controls"
+  },
+  "package_validation": "See separate TerraWave_M2_12_PACKAGE_RECEIPT.json for post-build ZIP CRC/SHA and complete updater reconstruction.",
+  "github": {
+    "repository": "DocDamage/world-radio-game",
+    "m211_pr": 1,
+    "m211_pr_merged": true,
+    "merge_commit": "573e24b27c16d90fc6db51153cbd534ec583d5fb",
+    "new_remote_write": false,
+    "reason": "Only read actions exposed by GitHub connector in this session; Git-ready files provided."
+  },
+  "not_certified": [
+    "Live public stream availability, geographic restrictions or directory end-to-end connectivity",
+    "Physical/human-heard audio",
+    "Physical gamepad",
+    "Windows executable or new PCK",
+    "RTX 3060 performance",
+    "Surveyed tides/seabed/transmitter positions or RF coverage",
+    "Complete Connecticut/global station inventory",
+    "Cesium dependency (not installed)",
+    "Full web-game feature parity"
+  ],
+  "evidence": "evidence/m2_12/"
+}

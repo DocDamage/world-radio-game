@@ -1,0 +1,151 @@
+{
+  "schema_version": 1,
+  "status": "passed",
+  "output": "C:\\dev\\radio world godot\\validation\\windows-local-final",
+  "platform": {
+    "system": "Windows",
+    "release": "11",
+    "machine": "AMD64",
+    "python": "3.13.13"
+  },
+  "versions": {
+    "godot": "4.7.2.stable.official.ed1daf0bf",
+    "godot_executable": "C:\\dev\\radio world godot\\.tools\\godot-4.7.2\\Godot_v4.7.2-stable_win64_console.exe",
+    "ffmpeg": "ffmpeg version 9.0.1-essentials_build-www.gyan.dev Copyright (c) 2000-2026 the FFmpeg developers",
+    "ffmpeg_executable": "C:\\dev\\radio world godot\\.tools\\ffmpeg\\ffmpeg-9.0.1-essentials_build\\bin\\ffmpeg.exe",
+    "ffmpeg_required_protocols": [
+      "input:http",
+      "input:https",
+      "input:tcp",
+      "input:tls",
+      "output:pipe"
+    ],
+    "python_executable": "C:\\dev\\radio world godot\\.tools\\qa-venv\\Scripts\\python.exe",
+    "python_required_modules": [
+      "PIL",
+      "fiona",
+      "numpy",
+      "pyproj",
+      "rasterio",
+      "shapely"
+    ]
+  },
+  "isolation": {
+    "godot_user_home": "C:\\dev\\radio world godot\\validation\\windows-local-final\\isolated-state\\godot-user-home",
+    "appdata": "C:\\dev\\radio world godot\\validation\\windows-local-final\\isolated-state\\appdata\\roaming",
+    "localappdata": "C:\\dev\\radio world godot\\validation\\windows-local-final\\isolated-state\\appdata\\local",
+    "temp": "C:\\dev\\radio world godot\\validation\\windows-local-final\\isolated-state\\temp",
+    "profile": "C:\\dev\\radio world godot\\validation\\windows-local-final\\isolated-state\\profile.json",
+    "catalog": "C:\\dev\\radio world godot\\validation\\windows-local-final\\isolated-state\\catalog.json",
+    "region_library": "C:\\dev\\radio world godot\\validation\\windows-local-final\\isolated-state\\region-library",
+    "qa_output": "C:\\dev\\radio world godot\\validation\\windows-local-final\\isolated-state\\qa-output"
+  },
+  "steps": {
+    "editor_import": {
+      "command": [
+        "C:\\dev\\radio world godot\\.tools\\godot-4.7.2\\Godot_v4.7.2-stable_win64_console.exe",
+        "--headless",
+        "--audio-driver",
+        "Dummy",
+        "--path",
+        "C:\\dev\\radio world godot\\TerraWave-Godot-M2.12",
+        "--editor",
+        "--import"
+      ],
+      "log": "C:\\dev\\radio world godot\\validation\\windows-local-final\\editor-import.log",
+      "timeout_seconds": 900,
+      "elapsed_seconds": 5.856,
+      "unexpected_engine_errors": false,
+      "status": "passed",
+      "exit_code": 0
+    },
+    "decoder_feedback": {
+      "command": [
+        "C:\\dev\\radio world godot\\.tools\\godot-4.7.2\\Godot_v4.7.2-stable_win64_console.exe",
+        "--headless",
+        "--audio-driver",
+        "Dummy",
+        "--path",
+        "C:\\dev\\radio world godot\\TerraWave-Godot-M2.12",
+        "--script",
+        "res://tests/test_decoder_feedback.gd"
+      ],
+      "log": "C:\\dev\\radio world godot\\validation\\windows-local-final\\decoder-feedback.log",
+      "timeout_seconds": 120,
+      "elapsed_seconds": 0.32,
+      "unexpected_engine_errors": false,
+      "status": "passed",
+      "exit_code": 0,
+      "decoder_feedback": {
+        "checks": 14,
+        "failed": 0,
+        "failures": []
+      }
+    },
+    "radio_voyages": {
+      "command": [
+        "C:\\dev\\radio world godot\\.tools\\qa-venv\\Scripts\\python.exe",
+        "C:\\dev\\radio world godot\\TerraWave-Godot-M2.12\\tools\\validate_radio_voyages.py",
+        "--godot",
+        "C:\\dev\\radio world godot\\.tools\\godot-4.7.2\\Godot_v4.7.2-stable_win64_console.exe",
+        "--output",
+        "C:\\dev\\radio world godot\\validation\\windows-local-final\\radio-voyages"
+      ],
+      "log": "C:\\dev\\radio world godot\\validation\\windows-local-final\\radio-voyages.log",
+      "timeout_seconds": 1200,
+      "elapsed_seconds": 9.928,
+      "unexpected_engine_errors": false,
+      "status": "passed",
+      "exit_code": 0
+    },
+    "new_haven_native": {
+      "command": [
+        "C:\\dev\\radio world godot\\.tools\\qa-venv\\Scripts\\python.exe",
+        "C:\\dev\\radio world godot\\TerraWave-Godot-M2.12\\tests\\run_native_tests.py",
+        "--godot",
+        "C:\\dev\\radio world godot\\.tools\\godot-4.7.2\\Godot_v4.7.2-stable_win64_console.exe",
+        "--ffmpeg",
+        "C:\\dev\\radio world godot\\.tools\\ffmpeg\\ffmpeg-9.0.1-essentials_build\\bin\\ffmpeg.exe",
+        "--new-haven-only",
+        "--timeout",
+        "900",
+        "--output",
+        "C:\\dev\\radio world godot\\validation\\windows-local-final\\new-haven-native"
+      ],
+      "log": "C:\\dev\\radio world godot\\validation\\windows-local-final\\new-haven-native.log",
+      "timeout_seconds": 960,
+      "elapsed_seconds": 38.908,
+      "unexpected_engine_errors": false,
+      "status": "passed",
+      "exit_code": 0
+    },
+    "marine_native": {
+      "command": [
+        "C:\\dev\\radio world godot\\.tools\\qa-venv\\Scripts\\python.exe",
+        "C:\\dev\\radio world godot\\TerraWave-Godot-M2.12\\tests\\run_native_tests.py",
+        "--godot",
+        "C:\\dev\\radio world godot\\.tools\\godot-4.7.2\\Godot_v4.7.2-stable_win64_console.exe",
+        "--ffmpeg",
+        "C:\\dev\\radio world godot\\.tools\\ffmpeg\\ffmpeg-9.0.1-essentials_build\\bin\\ffmpeg.exe",
+        "--marine-only",
+        "--timeout",
+        "900",
+        "--output",
+        "C:\\dev\\radio world godot\\validation\\windows-local-final\\marine-native"
+      ],
+      "log": "C:\\dev\\radio world godot\\validation\\windows-local-final\\marine-native.log",
+      "timeout_seconds": 960,
+      "elapsed_seconds": 33.749,
+      "unexpected_engine_errors": false,
+      "status": "passed",
+      "exit_code": 0
+    }
+  },
+  "limits": [
+    "Godot runs with Dummy audio; this is not human-audible audio certification.",
+    "No physical controller or target-hardware performance certification is performed.",
+    "The radio test uses owned synthetic loopback audio; public radio availability is not certified.",
+    "This source-project gate does not certify a Windows export, signing, or installer."
+  ],
+  "failed_steps": []
+}

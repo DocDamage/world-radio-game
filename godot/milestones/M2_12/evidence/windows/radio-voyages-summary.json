@@ -1,0 +1,79 @@
+{
+  "version": "0.2.12-dev",
+  "engine": "4.7.2.stable.official.ed1daf0bf",
+  "failed_suites": [],
+  "checks": 143,
+  "suites": {
+    "regional": {
+      "exit": 0,
+      "unexpected_engine_errors": false,
+      "result": {
+        "checks": 57,
+        "failed": 0,
+        "failures": []
+      }
+    },
+    "voyage": {
+      "exit": 0,
+      "unexpected_engine_errors": false,
+      "result": {
+        "checks": 32,
+        "failed": 0,
+        "failures": []
+      }
+    },
+    "restart_seed": {
+      "exit": 0,
+      "unexpected_engine_errors": false,
+      "result": {
+        "checks": 1,
+        "failed": 0,
+        "failures": [],
+        "phase": "seed"
+      }
+    },
+    "restart_verify": {
+      "exit": 0,
+      "unexpected_engine_errors": false,
+      "result": {
+        "checks": 10,
+        "failed": 0,
+        "failures": [],
+        "phase": "verify"
+      }
+    },
+    "native": {
+      "exit": 0,
+      "unexpected_engine_errors": false,
+      "result": {
+        "checks": 43,
+        "engine": {
+          "build": "official",
+          "hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
+          "hex": 263938,
+          "major": 4,
+          "minor": 7,
+          "patch": 2,
+          "status": "stable",
+          "string": "4.7.2-stable (official)",
+          "timestamp": 0
+        },
+        "evidence": {
+          "marker_visual_framing": "Camera aimed directly for inspection; movement input is covered by separate coastal suites.",
+          "public_radio_audio": "Not tested; selection and discovery only."
+        },
+        "failed": 0,
+        "failures": [],
+        "scope": "Integrated host + native runtime; injected input, not physical devices. No radio playback in this smoke run.",
+        "screenshots": [
+          "M2.12-New-Haven-Stations-1440.png",
+          "M2.12-New-Haven-Stations-1100.png",
+          "M2.12-Harbor-Waypoint.png",
+          "M2.12-Voyage-History.png"
+        ]
+      }
+    }
+  },
+  "public_radio_audio_tested": false,
+  "physical_devices_tested": false
+}

@@ -1,0 +1,39 @@
+{
+  "schema": 1,
+  "from_version": "0.2.10-rc1",
+  "to_version": "0.2.11-dev",
+  "milestone": "M2.11 Harbor Navigation & Exploration",
+  "required_base_sha256": {
+    "project.godot": "3b3ba3ce22e6be6cb0112846ff9b58e359f324ae1a2f05348854e9b98d944dad",
+    "src/exploration/marine/marine_controller.gd": "0147d893892075711785e55d4b8d72baf9256bba04b3f572390e601b100960a7"
+  },
+  "payload": {
+    "addons/terrawave_marine/coastal/navigation_guide.gd": {
+      "bytes": 3821,
+      "sha256": "51f7b260a3b692665f33d1b1a1c494e1877e0403c9592ddd82fe177dca9d9036"
+    },
+    "docs/M2_11_DEV_HANDOFF.md": {
+      "bytes": 2128,
+      "sha256": "cf729117a8d5dac4b1bc6ebfc6b462c5636a1c396c766f195e6891dfd6262acb"
+    },
+    "project.godot": {
+      "bytes": 1333,
+      "sha256": "d3b5b352989dbbfc8d7dafce386fcfd396792744198ceec2e6eaebbb64df6cfc"
+    },
+    "src/exploration/marine/marine_controller.gd": {
+      "bytes": 6710,
+      "sha256": "0b0ee8df53c6ffd5ab91669a728d196e839e99f50ad2999abe230b6802fbdfc2"
+    },
+    "tests/test_navigation_guide.gd": {
+      "bytes": 1546,
+      "sha256": "3d3fad97cb0c8d86274c20f6d126898164050128c3dd419e9d95d6b20e0bae92"
+    }
+  },
+  "validation": {
+    "godot": "4.7.2.stable.official.ed1daf0bf",
+    "navigation_checks": 11,
+    "navigation_failed": 0,
+    "full_application": "blocked_by_truncated_uploaded_source",
+    "manifest_missing_in_uploaded_source": 1866
+  }
+}

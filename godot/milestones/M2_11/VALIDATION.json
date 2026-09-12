@@ -1,0 +1,12 @@
+{
+  "version": "0.2.11-dev",
+  "engine": "Godot 4.7.2 stable official ed1daf0bf",
+  "new_navigation_checks": {"passed": 11, "failed": 0},
+  "uploaded_m2_10r_source_recovery": {
+    "status": "truncated",
+    "source_manifest_files": 2304,
+    "missing_after_recovery_and_intact_update_overlay": 1866,
+    "full_application_validation": "not claimed"
+  },
+  "delivery_form": "verified update patch for a complete M2.10R source tree"
+}

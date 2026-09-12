@@ -1,0 +1,40 @@
+; TerraWave native migration, milestone 2.10R coastal systems. No browser runtime.
+config_version=5
+
+[application]
+config/name="TerraWave Native"
+config/description="Native globe, persistent radio and offline ground exploration — integrated milestone 2.10R coastal systems"
+config/version="0.2.11-dev"
+run/main_scene="res://scenes/Main.tscn"
+config/features=PackedStringArray("4.7", "GL Compatibility")
+config/icon="res://assets/icon.svg"
+config/use_custom_user_dir=true
+config/custom_user_dir_name="TerraWaveNative"
+
+[autoload]
+AppState="*res://src/core/app_state.gd"
+StationCatalog="*res://src/core/station_catalog.gd"
+RadioPlayer="*res://src/audio/radio_player.gd"
+
+[display]
+window/size/viewport_width=1440
+window/size/viewport_height=900
+window/size/window_width_override=1440
+window/size/window_height_override=900
+window/size/min_width=1100
+window/size/min_height=720
+window/stretch/mode="canvas_items"
+
+[rendering]
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/default_filters/use_nearest_mipmap_filter=false
+textures/default_filters/anisotropic_filtering_level=2
+renderer/rendering_method.web="gl_compatibility"
+environment/defaults/default_clear_color=Color(0.021, 0.033, 0.06, 1)
+
+[audio]
+driver/mix_rate=48000
+
+[debug]
+gdscript/warnings/untyped_declaration=0
